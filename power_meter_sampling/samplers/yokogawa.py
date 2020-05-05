@@ -50,7 +50,27 @@ class Sampler():
             self._meter_ip = self._parameters["meter_ip"]
         else:
             sys.stdout.write("ERROR: must set meter_ip in %s\n" % parm_file)
-            sys.exit(0)
+            sys.exit(1)
+
+        if "titles" in self._parameters and "elements" in self._parameters:
+            self._titles = tuple(self._parameters["titles"])
+            elements=[]
+            for e in self._parameters["elements"]:
+                try:
+                    i=int(e)
+                except ValueError:
+                    s="ERROR: Elements must be integers (not %s)\n" % e
+                    sys.stdout.write(s)
+                    sys.exit(1)
+                if i<1 or i>3:
+                    s="ERROR: Elements 1, 2 or 3 (not %d)\n" % i
+                    sys.stdout.write(s)
+                    sys.exit(1)
+                elements.append(i)
+            self._elements = tuple(elements)
+        else:
+            sys.stdout.write("ERROR: must set titles and elements in %s\n" % parm_file)
+            sys.exit(1)
 
         self._address = "TCPIP::%s::INSTR" % self._meter_ip
         self._rm = pyvisa.ResourceManager('@py')
@@ -91,17 +111,12 @@ class Sampler():
 
     def get_titles(self):
         """Required: returns tuple of titles for first row of CSV file"""
-        return ("Yokogawa Power 1",
-                "Yokogawa Power 2",
-                "Yokogawa Power 3")
+        return self._titles
 
     def get_values(self):
         """Required: returns tuple of values for rows in CSV file"""
-        #command=":Numeric:Normal:VALue? 3; :Numeric:Normal:VALue? 13; :Numeric:Normal:VALue? 23"
-        #string_values = self._query(command)
-        return (self.get_power(1),
-                self.get_power(2),
-                self.get_power(3))
+        v=[self.get_power(x) for x in self._elements]
+        return tuple(v)
 
 if __name__ == '__main__':
     sampler=Sampler()
@@ -111,3 +126,4 @@ if __name__ == '__main__':
 
     sys.stdout.write("Values:\n")
     pprint.pprint(sampler.get_values())
+

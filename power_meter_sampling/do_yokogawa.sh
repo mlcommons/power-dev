@@ -15,14 +15,15 @@
 # =============================================================================
 
 sampling_interval=2
-sampling_duration=60
+#sampling_duration=60
+sampling_duration=1000
 
-csvfile=sample_metrics_$(hostname -s)_$(date '+%Y-%m-%d_%H-%M-%S')_${sampling_interval}_${sampling_duration}.csv
+logfile=sample_metrics_$(hostname -s)_$(date '+%Y-%m-%d_%H-%M-%S')_${sampling_interval}_${sampling_duration}.log
 
 #echo \
 python3 sample_metrics.py -v \
         -I $sampling_interval \
         -D $sampling_duration \
-        -c $csvfile \
+        -l $logfile \
         samplers.yokogawa
 

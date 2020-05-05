@@ -14,8 +14,8 @@ Control and monitoring of power meters over Ethernet uses pyvisa. To install:
 
 sample\_metrics.py is a framework for running a collection of "samplers"
 (i.e. classes called "Sampler" that live in files in the "samplers" directory).
-Output is a CSV file that includes results from each of the samplers, in
-the same order as given on the command line.
+The log file contains values from each of the samplers in CSV format in
+the same order as given on the command line (grep for "^CSV, " to extract).
 
 Each sampler must be a class called Sampler, and must have the following
 methods:
@@ -25,8 +25,8 @@ methods:
   get_values(self)
 ```
 The first method is called just before deletion.
-Second returns a tuple of CSV titles for first line of output CSV file
-Third returns a tuple of CSV values for sample lines of output CSV file
+Second returns a tuple of CSV titles for the first CSV line in the log file.
+Third returns a tuple of CSV values for subsequent CSV lines in the log file.
 
 Detailed usage is shown below, note that any number of samplers can
 be appended to the command.
@@ -34,7 +34,7 @@ be appended to the command.
 ```
 sample_metrics.py -h
 usage: sample_metrics.py [-h] [-I SAMPLING_INTERVAL] [-D SAMPLING_DURATION]
-                         [-o OUTFILE] [-c CSVFILE] [-a CSVFILE_AVERAGE] [-v]
+                         [-o OUTFILE] [-l LOGFILE] [-v]
                          sampler_name [sampler_name ...]
 
 positional arguments:
@@ -48,10 +48,8 @@ optional arguments:
                         Sampling Duration (sec)
   -o OUTFILE, --outfile OUTFILE
                         Output file
-  -c CSVFILE, --csvfile CSVFILE
+  -l LOGFILE, --logfile LOGFILE
                         Comma Separated Variable result
-  -a CSVFILE_AVERAGE, --csvfile_average CSVFILE_AVERAGE
-                        Comma Separated Variable average result
   -v, --verbose         Increase output verbosity
 
 ```

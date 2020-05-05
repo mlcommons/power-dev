@@ -24,6 +24,7 @@ import json
 import pprint
 import time
 import importlib
+import hashlib
 
 # See https://stackoverflow.com/questions/10415028/how-can-i-recover-the-return-value-of-a-function-passed-to-multiprocessing-proce
 # For error handling: https://stackoverflow.com/questions/19924104/python-multiprocessing-handling-child-errors-in-parent
@@ -41,19 +42,33 @@ class SampleMetrics():
                  verbose = 0):
         self._f_objects = f_objects
         self._sampler_modules = sampler_modules
+
+        #my_name=os.path.abspath(__file__)
+        my_name=__file__
+        with open(my_name) as f:
+            data = f.read()
+            sha1 = hashlib.sha1(str(data).encode('utf-8')).hexdigest()
+            self.write("SHA1, %s %s" % (os.path.basename(my_name), sha1),
+                       f_out=self._f_objects["f_log"])
+
         self._samplers = {}
         for m in self._sampler_modules:
             self._samplers[m]=m.Sampler()
+            my_name=m.__file__
+            with open(my_name) as f:
+                data = f.read()
+                sha1 = hashlib.sha1(str(data).encode('utf-8')).hexdigest()
+                self.write("SHA1, %s %s" % (os.path.basename(my_name), sha1),
+                                           f_out=self._f_objects["f_log"])
+
         self._sampling_interval = sampling_interval
+        self.write("PARAMETER, sampling_interval %s" % self._sampling_interval,
+                   f_out=self._f_objects["f_log"])
         self._sampling_duration = sampling_duration
+        self.write("PARAMETER, sampling_duration %s" % self._sampling_duration,
+                   f_out=self._f_objects["f_log"])
         self._verbose = verbose
-
         self._error = None
-        self._values_ave = []
-
-# TODO: log sha1 hash of each source file:
-# sha1s += hashlib.sha1(file_data).hexdigest() + " " + fn + "\n"
-# see https://github.com/mlperf/inference/blob/master/loadgen/version_generator.py
 
     def __enter__(self):
         return self
@@ -68,19 +83,19 @@ class SampleMetrics():
             sampler = self._samplers[m].close()
         self._sampler_modules = None
 
-    def write(self, s, prefix = "", suffix = "\n"):
-        self._f_objects["f_out"].write("%s%s%s" % (prefix, s, suffix))
-        self._f_objects["f_out"].flush()
+    def write(self, simple_string, f_out=None, prefix = "", suffix = "\n"):
+        if not f_out:
+            f_out=self._f_objects["f_out"]
+        f_out.write("%s%s%s" % (prefix, simple_string, suffix))
+        f_out.flush()
 
-    def write_csv(self, f_csv, items):
-        if f_csv:
-            s = ""
-            sep = ""
+    def write_csv(self, items, f_log):
+        if f_log:
+            s = "CSV"
             for item in items:
-                s = "%s%s%s" % (s, sep, item)
-                if not sep: sep = ", "
-            f_csv.write("%s\n" % s)
-            f_csv.flush()
+                s = "%s, %s" % (s, item)
+            f_log.write("%s\n" % s)
+            f_log.flush()
 
     def get_titles(self, titles0=[]):
         titles=list(titles0)
@@ -131,8 +146,7 @@ class SampleMetrics():
 
     def run(self):
         titles = self.get_titles(["epoch"])
-        self.write_csv(self._f_objects["f_csv_data"], titles)
-        self.write_csv(self._f_objects["f_csv_ave"], titles)
+        self.write_csv(titles, self._f_objects["f_log"])
         self._error = 0
         time0 = time.time()
         time1 = None
@@ -149,13 +163,7 @@ class SampleMetrics():
                 time1 = current_time
                 #values=self.get_values([current_time])
                 values=self.get_values_multiprocessing([current_time])
-                self.write_csv(self._f_objects["f_csv_data"], values)
-                if self._f_objects["f_csv_ave"]:
-                    for ii in range(len(values)):
-                        try:
-                            self._values_ave[ii]+=float(values[ii])
-                        except IndexError:
-                            self._values_ave.append(float(values[ii]))
+                self.write_csv(values, self._f_objects["f_log"])
                 self._num_sample_cycles += 1
                 if self._verbose>0:
                     self.write("Number of Samples Cycles completed: %d" % self._num_sample_cycles)
@@ -164,9 +172,6 @@ class SampleMetrics():
                 time.sleep(remaining_time/2.0)
                 
             delta_time = time.time()-time0
-
-        values = [x/self._num_sample_cycles for x in self._values_ave]
-        self.write_csv(self._f_objects["f_csv_ave"], values)
 
         return self._error
 
@@ -204,13 +209,9 @@ def parse():
                         action = "store", default = None,
                         help = "Output file")
 
-    parser.add_argument("-c", "--csvfile",
+    parser.add_argument("-l", "--logfile",
                         action = "store", default = None,
                         help = "Comma Separated Variable result")
-
-    parser.add_argument("-a", "--csvfile_average",
-                        action = "store", default = None,
-                        help = "Comma Separated Variable average result")
 
     parser.add_argument("-v", "--verbose",
                         action = "count", default = 0,
@@ -223,7 +224,8 @@ def parse():
 
     sampler_modules = []
     for sampler_name in args.sampler_name:
-        m=importlib.import_module(sampler_name, package=None)
+        #m=importlib.import_module(sampler_name, package=None)
+        m=importlib.import_module(sampler_name)
         sampler_modules.append(m)
 
     f_objects={}
@@ -233,15 +235,10 @@ def parse():
     else:
         f_objects["f_out"] = sys.stdout
 
-    if args.csvfile:
-        f_objects["f_csv_data"] = open(args.csvfile, 'w')
+    if args.logfile:
+        f_objects["f_log"] = open(args.logfile, 'w')
     else:
-        f_objects["f_csv_data"] = sys.stdout
-
-    if args.csvfile_average:
-        f_objects["f_csv_ave"] = open(args.csvfile_average, 'w')
-    else:
-        f_objects["f_csv_ave"] = None
+        f_objects["f_log"] = sys.stdout
 
     if args.verbose>0:
         try:
