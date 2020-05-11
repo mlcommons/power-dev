@@ -14,13 +14,34 @@
 # limitations under the License.
 # =============================================================================
 
+
+usage(){
+    echo "Usage: $0 -i <interval> -d <duration>"
+}
+
+is_number() {
+    number=$1
+    if ! [[ "$number" =~ ^[0-9]+$ ]] ; then
+        usage
+        exit 1
+    fi
+}
+
 sampling_interval=2
-#sampling_duration=60
-sampling_duration=1000
+sampling_duration=60
+
+while getopts "i:d:h" opt; do
+    case ${opt} in
+    i  ) is_number $OPTARG ; sampling_interval=$OPTARG ;;
+    d  ) is_number $OPTARG ; sampling_duration=$OPTARG ;;
+    h  ) usage; exit 0 ;;
+    \? ) usage; exit 1 ;;
+    :  ) echo "Invalid option: $OPTARG requires an argument" 1>&2; exit 1 ;;
+  esac
+done
 
 logfile=sample_metrics_$(hostname -s)_$(date '+%Y-%m-%d_%H-%M-%S')_${sampling_interval}_${sampling_duration}.log
 
-#echo \
 python3 sample_metrics.py -v \
         -I $sampling_interval \
         -D $sampling_duration \
