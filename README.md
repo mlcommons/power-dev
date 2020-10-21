@@ -1,2 +1,2 @@
-# power
+# Power
 Power measurement 
