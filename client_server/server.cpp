@@ -29,6 +29,10 @@
 #define STOP_PTD 200
 #define GET_DATA 500
 
+#define PTD_PORT "8888"
+#define PTD_IP "127.0.0.1"
+#define MINUTE_DURATION_IN_SECONDS 60
+
 #define DEFAULT_BUFFER_CHUNK_SIZE 4096
 #define DEFAULT_FILE_CHUNK_SIZE 65536
 #define DEFAULT_BUFLEN 512
@@ -43,7 +47,7 @@ struct serverAnswer {
     char err_msg[DEFAULT_BUFLEN];
 };
 
-int sentMessage(int ClientSocket, char * message, size_t msgLength) {
+int sentMessage(int ClientSocket, char *message, size_t msgLength) {
     int iSendResult = send(ClientSocket, message, msgLength, 0);
     if (iSendResult == SOCKET_ERROR) {
         std::cerr << "Send failed with error: " << WSAGetLastError() << "Exit (1)" << std::endl;
@@ -56,8 +60,9 @@ int sentMessage(int ClientSocket, char * message, size_t msgLength) {
 }
 
 int sentAnswerForClient(int ClientSocket, serverAnswer *answer) {
-    sentMessage(ClientSocket, (char *)answer, sizeof(serverAnswer));
-    std::cout << "Send message to client: code is " << answer->err_code << ", " << "message is " << answer->err_msg << std::endl;
+    sentMessage(ClientSocket, (char *) answer, sizeof(serverAnswer));
+    std::cout << "Send message to client: code is " << answer->err_code << ", " << "message is " << answer->err_msg
+              << std::endl;
     return 0;
 }
 
@@ -166,6 +171,18 @@ bool closeSystemProcess(PROCESS_INFORMATION *pi) {
     return TerminateProcess(pi->hProcess, 0) && CloseHandle(pi->hProcess) && CloseHandle(pi->hThread);
 }
 
+void recvPtdAnswer(int ptdClientSocket) {
+    char recvbuf[DEFAULT_BUFLEN];
+    int iResult = recv(ptdClientSocket, recvbuf, DEFAULT_BUFLEN, 0);
+    if (iResult > 0) {
+        recvbuf[iResult] = '\0';
+        std::cout << "PTD answer: " << recvbuf << std::endl;
+    } else if (iResult == 0)
+        std::cout << "Connection closed" << std::endl;
+    else
+        std::cout << "\"recv failed with error:" << WSAGetLastError() << std::endl;
+}
+
 int startPtdClient() {
     WSADATA wsaData;
     SOCKET ConnectSocket = INVALID_SOCKET;
@@ -174,13 +191,13 @@ int startPtdClient() {
     int iResult;
 
     // Initialize Winsock
-    iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
+    iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
-        printf("WSAStartup failed with error: %d\n", iResult);
+        std::cerr << "WSAStartup failed with error: " << iResult << std::endl;
         return -1;
     }
 
-    ZeroMemory( &hints, sizeof(hints) );
+    ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
@@ -188,15 +205,15 @@ int startPtdClient() {
     // Resolve the server address and port
     iResult = getaddrinfo(PTD_IP, PTD_PORT, &hints, &result);
     if (iResult != 0) {
-        printf("getaddrinfo failed with error: %d\n", iResult);
+        std::cerr << "getaddrinfo failed with error: " << iResult << std::endl;
         WSACleanup();
-        return -1 ;
+        return -1;
     }
     // Attempt to connect to an address until one succeeds
     // Create a SOCKET for connecting to server
     ConnectSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (ConnectSocket == INVALID_SOCKET) {
-        printf("socket failed with error: %ld\n", WSAGetLastError());
+        std::cerr << "socket failed with error: " << WSAGetLastError() << std::endl;
         WSACleanup();
         return -1;
     }
@@ -204,13 +221,14 @@ int startPtdClient() {
     // Connect to PTD.
     sockaddr_in clientService;
     clientService.sin_family = AF_INET;
-    clientService.sin_addr.s_addr = inet_addr("127.0.0.1");
-    clientService.sin_port = htons(8888);
+    clientService.sin_addr.s_addr = inet_addr(PTD_IP);
+    clientService.sin_port = htons(atoi(PTD_PORT));
 
     int i = 0;
-    while (i < 30) {
-        iResult = connect(ConnectSocket, (SOCKADDR *) & clientService, sizeof (clientService));
-        if (iResult != SOCKET_ERROR){
+    //Waiting connection for PTD for one minute
+    while (i < MINUTE_DURATION_IN_SECONDS) {
+        iResult = connect(ConnectSocket, (SOCKADDR * ) & clientService, sizeof(clientService));
+        if (iResult != SOCKET_ERROR) {
             break;
         }
         i++;
@@ -225,49 +243,15 @@ int startPtdClient() {
     freeaddrinfo(result);
 
     if (ConnectSocket == INVALID_SOCKET) {
-        printf("Unable to connect to PTD!\n");
-        WSACleanup();
-        return -1 ;
-    }
-
-    std::cout << "Ready to send messages to ptd" << std::endl;
-
-    const char sendBuf[] = "Identify\r\n";
-    iResult = send(ConnectSocket, sendBuf, (int)strlen(sendBuf), 0 );
-    if (iResult == SOCKET_ERROR) {
-        printf("send failed with error: %d\n", WSAGetLastError());
-        closesocket(ConnectSocket);
+        std::cerr << "Unable to connect to PTD!" << std::endl;
         WSACleanup();
         return -1;
     }
-
-    std::cout << "Send message to ptd" << std::endl;
-
-    char recvbuf[DEFAULT_BUFLEN];
-    iResult = recv(ConnectSocket, recvbuf, DEFAULT_BUFLEN, 0);
-    if ( iResult > 0 )
-        printf("Bytes received: %d\n", iResult);
-    else if ( iResult == 0 )
-        printf("Connection closed\n");
-    else
-        printf("recv failed with error: %d\n", WSAGetLastError());
+    char identifyCommand[] = "Identify\r\n";
+    sentMessage(ConnectSocket, identifyCommand, strlen(identifyCommand));
+    recvPtdAnswer(ConnectSocket);
 
     return ConnectSocket;
-
-}
-
-void recvPtdAnswer(int ptdClientSocket) {
-    char recvbuf[DEFAULT_BUFLEN];
-    int iResult = recv(ptdClientSocket, recvbuf, DEFAULT_BUFLEN, 0);
-    if ( iResult > 0 )
-    {
-        recvbuf[iResult] = '\0';
-        std::cout << "PTD answer: " << recvbuf << std::endl;
-    }
-    else if ( iResult == 0 )
-        std::cout << "Connection closed" << std::endl;
-    else
-        std::cout << "\"recv failed with error:" << WSAGetLastError() << std::endl;
 }
 
 struct InitMessage {
@@ -276,19 +260,24 @@ struct InitMessage {
 };
 
 int __cdecl main(int argc, char const *argv[]) {
+    char ptdSetAmps[] = "SR,A,Auto\r\n";
+    char ptdSetVolts[] = "SR,V,300\r\n";
+    char ptdGo[] = "Go,1000,0\r\n";
+    char ptdStop[] = "Stop\r\n";
+
+
     cxxopts::Options options("Server for communication with PTD", "A brief description");
 
     options.add_options()
             ("p,serverPort", "Server port", cxxopts::value<std::string>()->default_value("4950"))
             ("i,ipAddress", "Server ip address", cxxopts::value<std::string>())
-            ("c,ptdConfigurationFile", "PTD configuration file path", cxxopts::value<std::string>()->default_value("config.txt"))
-            ("h,help", "Print usage")
-            ;
+            ("c,ptdConfigurationFile", "PTD configuration file path",
+             cxxopts::value<std::string>()->default_value("config.txt"))
+            ("h,help", "Print usage");
 
     auto parserResult = options.parse(argc, argv);
 
-    if (parserResult.count("help"))
-    {
+    if (parserResult.count("help")) {
         std::cout << options.help() << std::endl;
         exit(0);
     }
@@ -317,7 +306,6 @@ int __cdecl main(int argc, char const *argv[]) {
     int recvbuflen = DEFAULT_BUFLEN;
 
     char ptdCommand[] = PTD_COMMAND;
-    char scriptCommand[] = SCRIPT_COMMAND;
 
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -327,7 +315,8 @@ int __cdecl main(int argc, char const *argv[]) {
     }
     STARTUPINFO siNtp;
     PROCESS_INFORMATION piNtp;
-    executeSystemCommand(NTPD_START, &siNtp, &piNtp);
+    char ntpStrart[] = NTPD_START;
+    executeSystemCommand(ntpStrart, &siNtp, &piNtp);
 
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -391,27 +380,29 @@ int __cdecl main(int argc, char const *argv[]) {
         iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
         if (iResult > 0) {
 
-            InitMessage * initMessage = (InitMessage *) recvbuf;
+            InitMessage *initMessage = (InitMessage *) recvbuf;
             std::cout << "Client command: " << initMessage->messageNumber << std::endl;
             bool is_ptd_started;
             char ptdCommand[] = PTD_COMMAND;
             is_ptd_started = executeSystemCommand(ptdCommand, &siPtd, &piPtd);
             if (!is_ptd_started) {
-                sentAnswer(ClientSocket, 1, "Can not start process daemon");
+                char errMsg[] = "Can not start PTD";
+                sentAnswer(ClientSocket, 1, errMsg);
             }
             ptdClientSocket = startPtdClient();
 
             if (ptdClientSocket < 0) {
-                sentAnswer(ClientSocket, 1, "Can not open client socket for PTD");
+                char errMsg[] = "Can not open client socket for PTD";
+                sentAnswer(ClientSocket, 1, errMsg);
             }
-            if(initMessage->messageNumber == 100) {
-                sentMessage(ptdClientSocket, "SR,A,Auto\r\n", strlen( "SR,A,Auto\r\n"));
+            if (initMessage->messageNumber == 100) {
+                sentMessage(ptdClientSocket, ptdSetAmps, strlen(ptdSetAmps));
                 recvPtdAnswer(ptdClientSocket);
 
-                sentMessage(ptdClientSocket, "SR,V,300\r\n", strlen( "SR,V,300\r\n"));
+                sentMessage(ptdClientSocket, ptdSetVolts, strlen(ptdSetVolts));
                 recvPtdAnswer(ptdClientSocket);
 
-                sentMessage(ptdClientSocket, "Go,1000,0\r\n", strlen( "Go,1000,0\r\n"));
+                sentMessage(ptdClientSocket, ptdGo, strlen(ptdGo));
                 recvPtdAnswer(ptdClientSocket);
             } else {
                 char buffer[DEFAULT_BUFLEN];
@@ -420,11 +411,13 @@ int __cdecl main(int argc, char const *argv[]) {
                 std::cout << buffer << std::endl;
                 sentMessage(ptdClientSocket, buffer, strlen(buffer));
                 recvPtdAnswer(ptdClientSocket);
-                sentMessage(ptdClientSocket, "Go,1000,0\r\n", strlen( "Go,1000,0\r\n"));
+                sentMessage(ptdClientSocket, ptdGo, strlen(ptdGo));
                 recvPtdAnswer(ptdClientSocket);
             }
+
             if (is_ptd_started && (ptdClientSocket > -1)) {
-                sentAnswer(ClientSocket, 0, "Start all needed processes");
+                char startMsg[] = "Start all needed processes";
+                sentAnswer(ClientSocket, 0, startMsg);
             }
         }
 
@@ -433,14 +426,18 @@ int __cdecl main(int argc, char const *argv[]) {
             recvbuf[iResult] = '\0';
             bool IsPtdDeamonClosed;
             std::cout << "Client command: " << recvbuf << std::endl;
-            sentMessage(ptdClientSocket, "Stop\r\n", strlen("Stop\r\n"));
+            sentMessage(ptdClientSocket, ptdStop, strlen(ptdStop));
             closesocket(ptdClientSocket);
             WSACleanup();
+
+
             IsPtdDeamonClosed = closeSystemProcess(&piPtd);
             if (!IsPtdDeamonClosed) {
-                sentAnswer(ClientSocket, 1, "Can not stop process daemon");
+                char errMsg[] = "Can not stop process daemon";
+                sentAnswer(ClientSocket, 1, errMsg);
             } else {
-                sentAnswer(ClientSocket, 0, "Stop ptd.daemon and test.pl");
+                char errMsg[] = "Stop ptd.daemon";
+                sentAnswer(ClientSocket, 0, errMsg);
             }
         }
 
