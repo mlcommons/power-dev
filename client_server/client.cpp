@@ -1,4 +1,17 @@
-//Build command: g++ -o client client.cpp
+// Copyright 2018 The MLPerf Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// =============================================================================
 
 #include <stdio.h>
 #include <sys/socket.h>
@@ -11,27 +24,8 @@
 #include <errno.h>
 #include <iostream>
 #include "./cxxopts/include/cxxopts.hpp"
-
-#define PYTHON_COMMAND "python3.8 parse_mlperf.py -pli logs.txt -lgi ./build"
-#define NTPD_COMMAND "sudo /usr/sbin/ntpdate time.windows.com"
-
-#define RUN "100"
-#define STOP "200"
-#define GET_FILE "500"
-
-#define DEFAULT_BUFFER_CHUNK_SIZE 4096
-#define DEFAULT_FILE_CHUNK_SIZE 65536
-#define DEFAULT_BUFLEN 512
-
-struct ServerAnswer {
-    int code;
-    char message[DEFAULT_BUFLEN];
-};
-
-struct InitMessage {
-    int messageNumber;
-    float averageFloat;
-};
+#include "client.h"
+#include "clientConfigParser.h"
 
 int receiveBuffer(int s, char *buffer, int bufferSize, int chunkSize = DEFAULT_BUFFER_CHUNK_SIZE) {
     int allReceivedBytes = 0;
@@ -116,6 +110,15 @@ void sendInitialCommandToServer(int sock, bool isRangingMode) {
     std::cout << "Send command to server: " << message.messageNumber << std::endl;
 }
 
+void executeCommands(std::vector<std::string> commands){
+    for (int i = 0; i < commands.size(); i++) {
+        int returnCode = system(commands[i].c_str());
+        if (returnCode != 0) {
+            std::cerr << "Could not execute " << commands[i] << std::endl;
+        }
+    }
+}
+
 int main(int argc, char const *argv[]) {
     std::string serverIpAddress;
     std::string configurationFile;
@@ -156,6 +159,9 @@ int main(int argc, char const *argv[]) {
     serverPort = result["serverPort"].as<int>();
     configurationFile = result["configurationFile"].as<std::string>();
 
+    Commands commands = getClientCommands(configurationFile);
+    executeCommands(commands.ntp);
+
     int sock = 0;
     struct sockaddr_in ServerAddress;
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -174,17 +180,10 @@ int main(int argc, char const *argv[]) {
         std::cerr << "Connection Failed " << std::endl << "Exit (1)" << std::endl;
     }
 
-    int ntpStartedCode = system(NTPD_COMMAND);
-    if (ntpStartedCode != 0) {
-        std::cerr << "Can not start NTPd" << std::endl;
-    }
-
     sendInitialCommandToServer(sock, isRangingMode);
     receiveServerAnswer(sock);
 
-    //TODO: move commands in config file
-    system("sudo dd if=/dev/sda of=/tmp/tt.dd bs=1M count=3500");
-    system("7zr a -t7z  -mx=9 -m0=LZMA2 -mmt8 /tmp/dd1.7z /tmp/tt.dd");
+    executeCommands(commands.cli);
 
     sendCommandToServer(sock, STOP);
     receiveServerAnswer(sock);
@@ -192,6 +191,6 @@ int main(int argc, char const *argv[]) {
     sendCommandToServer(sock, GET_FILE);
     receiveFile(sock, logFile);
 
-    system(PYTHON_COMMAND);
+    executeCommands(commands.parser);
     return 0;
 }
