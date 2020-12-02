@@ -16,17 +16,16 @@
 #ifndef POWER_CLIENT_H
 #define POWER_CLIENT_H
 
-#define RUN "100"
+#define RUN 101
+#define RUN_RANGING 100
 #define STOP "200"
 #define GET_FILE "500"
+#define PYTHON_GET_MAX_VALUE "python getMaxValues.py -spl "
 
 #define DEFAULT_BUFFER_CHUNK_SIZE 4096
 #define DEFAULT_FILE_CHUNK_SIZE 65536
 #define DEFAULT_BUFLEN 512
-
-#define NTPD_COMMAND "sudo /usr/sbin/ntpdate time.windows.com"
-
-
+#include "maxAmpsVoltsParser.h"
 
 struct ServerAnswer {
     int code;
@@ -35,7 +34,7 @@ struct ServerAnswer {
 
 struct InitMessage {
     int messageNumber;
-    float averageFloat;
+    MaxAmpsVolts maxValues;
 };
 
 #endif //POWER_CLIENT_H

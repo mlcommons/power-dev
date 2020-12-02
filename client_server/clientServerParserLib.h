@@ -14,12 +14,15 @@
 #define END_OF_LINE '\n'
 #endif
 
-
-void copyCommandWithCheck(struct json_string_s* command, std::vector<std::string> * commands);
-void copyStringFromArrayToData(struct json_array_element_s* element, std::vector<std::string> * commands);
-void copyStringArrayToDataField(struct json_value_s* element, std::vector<std::string> *commands);
-void checkCommandBlockExistance(std::vector<std::string> * commands);
-std::string getLineFromFile(std::string fileName);
-struct json_object_element_s* getStartElement(std::string jsonString, struct json_value_s* root);
-
+void copyCommandWithCheck(struct json_string_s*, std::vector<std::string>*);
+void copyStringFromArrayToData(struct json_array_element_s*, std::vector<std::string>*);
+void copyStringArrayToDataField(struct json_value_s*, std::vector<std::string>* );
+void checkCommandValueExistence(std::vector<std::string>);
+std::string getLineFromFile(std::string);
+struct json_object_element_s* getStartElementFromFile(std::string, struct json_value_s*);
+void copyStringValueToDataField(struct json_value_s*, std::string *);
+struct json_object_element_s* getStartElement(struct json_value_s*);
+void getCommands(void *, void(* parseClientCommands)(json_object_element_s*, void *), std::string);
+void copyFloatValueFromString(struct json_value_s* , float *);
+void copyFloatValueFromNumber(struct json_value_s *, float *);
 #endif //POWER_CLIENT_H

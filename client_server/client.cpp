@@ -26,6 +26,7 @@
 #include "./cxxopts/include/cxxopts.hpp"
 #include "client.h"
 #include "clientConfigParser.h"
+#include "maxAmpsVoltsParser.h"
 
 int receiveBuffer(int s, char *buffer, int bufferSize, int chunkSize = DEFAULT_BUFFER_CHUNK_SIZE) {
     int allReceivedBytes = 0;
@@ -101,28 +102,40 @@ void sendCommandToServer(int sock, const char *msg) {
     std::cout << "Send command to server: " << message << std::endl;
 }
 
-void sendInitialCommandToServer(int sock, bool isRangingMode) {
+void sendInitialCommandToServer(int sock, bool isRangingMode, std::string fileName, float correctionFactor) {
     InitMessage message;
-    message.messageNumber = isRangingMode ? 100 : 101;
-    //TODO add func to get average
-    message.averageFloat = isRangingMode ? 0 : 2.1;
+    message.messageNumber = isRangingMode ? RUN_RANGING : RUN;
+
+    if (!isRangingMode) {
+        message.maxValues = getMaxAmpsVolts(fileName);
+        message.maxValues.maxAmps = message.maxValues.maxAmps * correctionFactor;
+        message.maxValues.maxVolts = message.maxValues.maxVolts * correctionFactor;
+    } else {
+        message.maxValues.maxAmps = 0;
+        message.maxValues.maxVolts = 0;
+    }
+
     send(sock, (char *) &message, sizeof(InitMessage), 0);
     std::cout << "Send command to server: " << message.messageNumber << std::endl;
 }
 
+void executeCommand(std::string command) {
+    std::cerr << command << std::endl;
+    int returnCode = system(command.c_str());
+    if (returnCode != 0) {
+        std::cerr << "Could not execute " << command << std::endl;
+    }
+}
+
 void executeCommands(std::vector<std::string> commands){
     for (int i = 0; i < commands.size(); i++) {
-        int returnCode = system(commands[i].c_str());
-        if (returnCode != 0) {
-            std::cerr << "Could not execute " << commands[i] << std::endl;
-        }
+        executeCommand(commands[i]);
     }
 }
 
 int main(int argc, char const *argv[]) {
     std::string serverIpAddress;
     std::string configurationFile;
-    std::string logFile;
     int serverPort;
     bool isRangingMode = false;
 
@@ -133,7 +146,6 @@ int main(int argc, char const *argv[]) {
             ("i,serverIpAddress", "Server ip address", cxxopts::value<std::string>())
             ("c,configurationFile", "Client configuration file path",
              cxxopts::value<std::string>()->default_value("config.txt"))
-            ("l,ptdLogFilePath", "Path to save PTD logfile", cxxopts::value<std::string>()->default_value("logs.txt"))
             ("r,ranging", "Ranging mode", cxxopts::value<bool>()->default_value("false"))
             ("h,help", "Print usage");
 
@@ -155,12 +167,11 @@ int main(int argc, char const *argv[]) {
         return 1;
     }
 
-    logFile = result["ptdLogFilePath"].as<std::string>();
     serverPort = result["serverPort"].as<int>();
     configurationFile = result["configurationFile"].as<std::string>();
 
-    Commands commands = getClientCommands(configurationFile);
-    executeCommands(commands.ntp);
+    ClientConfig data = getClientConfig(configurationFile);
+    executeCommands(data.ntp);
 
     int sock = 0;
     struct sockaddr_in ServerAddress;
@@ -180,17 +191,23 @@ int main(int argc, char const *argv[]) {
         std::cerr << "Connection Failed " << std::endl << "Exit (1)" << std::endl;
     }
 
-    sendInitialCommandToServer(sock, isRangingMode);
+    sendInitialCommandToServer(sock, isRangingMode, data.maxAmpsVoltsFile, data.correctionFactor);
     receiveServerAnswer(sock);
 
-    executeCommands(commands.cli);
+    //executeCommands(commands.cli);
+    sleep(10);
 
     sendCommandToServer(sock, STOP);
     receiveServerAnswer(sock);
 
     sendCommandToServer(sock, GET_FILE);
-    receiveFile(sock, logFile);
+    receiveFile(sock, data.logFile);
 
-    executeCommands(commands.parser);
+    if (isRangingMode) {
+        executeCommand(PYTHON_GET_MAX_VALUE + data.logFile + " -o " + data.maxAmpsVoltsFile);
+    } else {
+        executeCommands(data.parser);
+    }
+
     return 0;
 }

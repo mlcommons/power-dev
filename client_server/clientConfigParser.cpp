@@ -1,41 +1,34 @@
-#include "json.h/json.h"
 #include "clientConfigParser.h"
-#include "clientServerParserLib.h"
 
-void getCommands(json_object_element_s* element, Commands * data) {
-    struct json_string_s* element_name = element->name;
-    if (strcmp(element_name->string, RUN_NTP_COMMANDS) == 0) {
-        checkCommandBlockExistance(&data->ntp);
-        copyStringArrayToDataField(element->value, &data->ntp);
-    } else if (strcmp(element_name->string, RUN_TEST_COMMAND) == 0) {
-        checkCommandBlockExistance(&data->cli);
-        copyStringArrayToDataField(element->value, &data->cli);
-    } else if (strcmp(element_name->string, RUN_PARSER_COMMANDS) == 0) {
-        checkCommandBlockExistance(&data->parser);
-        copyStringArrayToDataField(element->value, &data->parser);
+void parseClientCommands(json_object_element_s *element, void *data) {
+    ClientConfig *commands = (ClientConfig *) data;
+    json_value_s *elementValue = element->value;
+    const char *elementNameString = element->name->string;
+    if (strcmp(elementNameString, RUN_NTP_COMMANDS) == 0) {
+        checkCommandValueExistence(commands->ntp);
+        copyStringArrayToDataField(elementValue, &(commands->ntp));
+    } else if (strcmp(elementNameString, RUN_TEST_COMMAND) == 0) {
+        checkCommandValueExistence(commands->cli);
+        copyStringArrayToDataField(elementValue, &commands->cli);
+    } else if (strcmp(elementNameString, RUN_PARSER_COMMANDS) == 0) {
+        checkCommandValueExistence(commands->parser);
+        copyStringArrayToDataField(elementValue, &commands->parser);
+    } else if (strcmp(elementNameString, MAX_AMPS_VOLTS_FILE) == 0) {
+        copyStringValueToDataField(elementValue, &commands->maxAmpsVoltsFile);
+    } else if (strcmp(elementNameString, CORRECTION_FACTOR) == 0) {
+        copyFloatValueFromNumber(elementValue, &commands->correctionFactor);
+    } else if (strcmp(elementNameString, LOG_FILE) == 0) {
+        copyStringValueToDataField(elementValue, &commands->logFile);
     } else {
         std::cout << "Wrong JSON key" << std::endl;
         exit(0);
     }
 }
 
-Commands getClientCommands(std::string fileName) {
-    Commands data;
-    struct json_value_s* root = NULL;
-
-    struct json_object_element_s* element = getStartElement(getLineFromFile(fileName), root);
-
-    if (element == NULL) {
-        std::cerr << "Empty json" << std::endl;
-        exit(0);
-    } else {
-        getCommands(element, &data);
-    }
-
-    while (element->next != NULL) {
-        element = element->next;
-        getCommands(element, &data);
-    }
-
+ClientConfig getClientConfig(std::string fileName) {
+    ClientConfig data;
+    getCommands(&data, parseClientCommands, fileName);
     return data;
 }
+
+
