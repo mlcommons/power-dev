@@ -23,7 +23,7 @@
 #include <netinet/tcp.h>
 #include <errno.h>
 #include <iostream>
-#include "./cxxopts/include/cxxopts.hpp"
+#include "./../cxxopts/include/cxxopts.hpp"
 #include "client.h"
 #include "clientConfigParser.h"
 #include "maxAmpsVoltsParser.h"

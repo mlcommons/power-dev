@@ -1,7 +1,7 @@
 
 #ifndef POWER_CLIENTSERVERPARSERLIB_H
 #define POWER_CLIENTSERVERPARSERLIB_H
-#include "json.h/json.h"
+#include "./../json.h/json.h"
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
