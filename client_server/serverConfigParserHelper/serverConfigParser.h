@@ -4,7 +4,7 @@
 
 #ifndef POWER_SERVERCONFIGPARSER_H
 #define POWER_SERVERCONFIGPARSER_H
-#include "clientServerParserLib.h"
+#include "./../clientServerParserLib/clientServerParserLib.h"
 #include <map>
 
 #define START_NTP_COMMAND "ntpStartCommand"

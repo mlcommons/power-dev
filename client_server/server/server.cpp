@@ -30,8 +30,8 @@
 #include <algorithm>
 #include <fstream>
 #include <netinet/tcp.h>
-#include "cxxopts.hpp"
-#include "serverConfigParser.h"
+#include "./../cxxopts/include/cxxopts.hpp"
+#include "./../serverConfigParserHelper/serverConfigParser.h"
 #include <errno.h>
 #include <stdio.h>
 #include <fcntl.h>
