@@ -194,8 +194,7 @@ int main(int argc, char const *argv[]) {
     sendInitialCommandToServer(sock, isRangingMode, data.maxAmpsVoltsFile, data.correctionFactor);
     receiveServerAnswer(sock);
 
-    //executeCommands(commands.cli);
-    sleep(10);
+    executeCommands(data.cli);
 
     sendCommandToServer(sock, STOP);
     receiveServerAnswer(sock);
