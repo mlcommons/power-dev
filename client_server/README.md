@@ -3,11 +3,14 @@
 
 ## Building
 ```bash
-#client building
-g++ clientServerParserLib.cpp clientConfigParser.cpp maxAmpsVoltsParser.cpp client.cpp -o client
-#server building
-g++ clientServerParserLib.cpp serverConfigParser.cpp server.cpp -o server.exe -lws2_32 -mwin32
-
+#client building (Ubuntu 18.04)
+cd ./client_server/client
+cmake ./CMakeLists.txt
+make
+#server building (Windows 10)
+cd ./client_server/server
+cmake ./CMakeLists.txt
+make
 ```
 
 ## Usage
@@ -16,7 +19,7 @@ g++ clientServerParserLib.cpp serverConfigParser.cpp server.cpp -o server.exe -l
 #client
 ./client -i 192.168.104.169 -c clientConfig.json
 #server
-.\server_v2.exe -i 192.168.104.169 -c .\serverConfig.json
+.\server.exe -i 192.168.104.169 -c .\serverConfig.json
 
 ```
 ## Example of configuration file for client.
