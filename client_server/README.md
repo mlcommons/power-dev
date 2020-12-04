@@ -1,5 +1,9 @@
 # Client server for PTD (brief description.)
+## Dependencies
+Windos OS: install w32tm.
+Linux OS: install ntpdate.
 
+Service and client is running as root, because they are using ntp server. If command for ntp in json config is empty, client and server program will assume that ntp server is configured. 
 
 ## Building
 ```bash
