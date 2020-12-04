@@ -16,6 +16,22 @@
 #ifndef POWER_CLIENT_H
 #define POWER_CLIENT_H
 
+#include <stdio.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <string.h>
+#include <algorithm>
+#include <fstream>
+#include <netinet/tcp.h>
+#include <errno.h>
+#include <iostream>
+#include "./../cxxopts/include/cxxopts.hpp"
+#include "client.h"
+#include "clientConfigParser.h"
+#include "maxAmpsVoltsParser.h"
+#include "interacting_with_process"
+
 #define RUN 101
 #define RUN_RANGING 100
 #define STOP "200"
@@ -25,7 +41,6 @@
 #define DEFAULT_BUFFER_CHUNK_SIZE 4096
 #define DEFAULT_FILE_CHUNK_SIZE 65536
 #define DEFAULT_BUFLEN 512
-#include "maxAmpsVoltsParser.h"
 
 struct ServerAnswer {
     int code;

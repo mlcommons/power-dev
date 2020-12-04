@@ -13,21 +13,6 @@
 // limitations under the License.
 // =============================================================================
 
-#include <stdio.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <string.h>
-#include <algorithm>
-#include <fstream>
-#include <netinet/tcp.h>
-#include <errno.h>
-#include <iostream>
-#include "./../cxxopts/include/cxxopts.hpp"
-#include "client.h"
-#include "clientConfigParser.h"
-#include "maxAmpsVoltsParser.h"
-
 int receiveBuffer(int s, char *buffer, int bufferSize, int chunkSize = DEFAULT_BUFFER_CHUNK_SIZE) {
     int allReceivedBytes = 0;
     while (allReceivedBytes < bufferSize) {
@@ -131,6 +116,10 @@ void executeCommands(std::vector<std::string> commands){
     for (int i = 0; i < commands.size(); i++) {
         executeCommand(commands[i]);
     }
+}
+
+int checkIsNtpEnable() {
+    killProcessByName()
 }
 
 int main(int argc, char const *argv[]) {
