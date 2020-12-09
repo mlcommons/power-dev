@@ -126,7 +126,7 @@ int startPtdClient() {
 
 int __cdecl main(int argc, char const *argv[]) {
     char ptdSetAmps[] = "SR,A,Auto\r\n";
-    char ptdSetVolts[] = "SR,V,Auto\r\n";
+    char ptdSetVolts[] = "SR,V,300\r\n";
     char ptdGo[] = "Go,1000,0\r\n";
     char ptdStop[] = "Stop\r\n";
 
@@ -280,11 +280,14 @@ int __cdecl main(int argc, char const *argv[]) {
                     }
 
                     if (prevCommand != std::string(ptdSetAmps)) {
-                        Sleep(SLEEP_PTD_AFTER_CHANGING_RANGE);
                         prevCommand = std::string(ptdSetAmps);
                         sentMessage(ptdClientSocket, ptdSetAmps, strlen(ptdSetAmps));
-                        std::cout << "Message to PTD: " << ptdSetAmps << std::endl;
                         recvPtdAnswer(ptdClientSocket);
+                        std::cout << "Message to PTD: " << ptdSetAmps << std::endl;
+                        sentMessage(ptdClientSocket, ptdSetVolts, strlen(ptdSetVolts));
+                        recvPtdAnswer(ptdClientSocket);
+                        std::cout << "Message to PTD: " << ptdSetVolts << std::endl;
+                        Sleep(SLEEP_PTD_AFTER_CHANGING_RANGE);
                     }
 
                     sentMessage(ptdClientSocket, ptdGo, strlen(ptdGo));
@@ -374,9 +377,9 @@ int __cdecl main(int argc, char const *argv[]) {
                     if (prevCommand != std::string(buffer)) {
                         prevCommand = std::string(buffer);
                         sentMessage(ptdClientSocket, buffer, strlen(buffer));
+                        std::cout << "Message to PTD: " << buffer << std::endl;
                         recvPtdAnswer(ptdClientSocket);
                         Sleep(SLEEP_PTD_AFTER_CHANGING_RANGE);
-                        std::cout << "Message to PTD: " << buffer << std::endl;
                     }
 
                     sentMessage(ptdClientSocket, ptdGo, strlen(ptdGo));
