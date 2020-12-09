@@ -4,7 +4,8 @@
 
 #ifndef POWER_MAXAMPSVOLTSPARSER_H
 #define POWER_MAXAMPSVOLTSPARSER_H
-#include "clientServerParserLib.h"
+#include "./../clientServerParserLib/clientServerParserLib.h"
+#include <map>
 
 constexpr auto MAX_AMPS = "maxAmps";
 constexpr auto MAX_VOLTS = "maxVolts";
@@ -14,5 +15,5 @@ struct MaxAmpsVolts {
     float maxVolts;
 };
 
-MaxAmpsVolts getMaxAmpsVolts(std::string fileName);
+std::map <std::string, MaxAmpsVolts> getMaxAmpsVolts(std::string fileName);
 #endif //POWER_MAXAMPSVOLTSPARSER_H

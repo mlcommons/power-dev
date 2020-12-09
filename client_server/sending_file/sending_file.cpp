@@ -1,3 +1,4 @@
+#include "sending_file.h"
 
 int64_t GetFileSize(const std::string &fileName) {
     FILE *f;
@@ -22,7 +23,7 @@ int SendBuffer(SOCKET s, const char *buffer, int bufferSize, int chunkSize = DEF
     return allSendedBytes;
 }
 
-int64_t SendFile(SOCKET s, const std::string &fileName, int chunkSize = DEFAULT_FILE_CHUNK_SIZE) {
+int64_t SendFile(SOCKET s, const std::string &fileName, int chunkSize) {
     const int64_t fileSize = GetFileSize(fileName);
 
     if (fileSize < 0) {
