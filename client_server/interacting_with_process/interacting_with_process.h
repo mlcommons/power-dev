@@ -5,7 +5,6 @@
 #ifndef POWER_INTERACTING_WITH_PROCESS_H
 #define POWER_INTERACTING_WITH_PROCESS_H
 
-
 #include <string>
 
 #if defined(__clang__) || (defined(__GNUC__) && !defined(_WIN32))

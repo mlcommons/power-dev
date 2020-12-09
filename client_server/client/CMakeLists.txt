@@ -9,3 +9,4 @@ include_directories(./../cxxopts ./../json.h ${SUBDIRS})
 
 add_executable(client client.cpp ./../maxValues/maxAmpsVoltsParser.cpp ./../clientServerParserLib/clientServerParserLib.cpp
         ./../clientConfigParserHelper/clientConfigParser.cpp ./../interacting_with_process/interacting_with_process.cpp)
+

@@ -5,6 +5,7 @@
 #ifndef POWER_CLIENTCONFIGPARSER_H
 #define POWER_CLIENTCONFIGPARSER_H
 #include "clientServerParserLib.h"
+#include <map>
 
 constexpr auto RUN_NTP_COMMANDS = "ntpStartCommand";
 constexpr auto RUN_TEST_COMMAND = "testCommands";
@@ -15,7 +16,7 @@ constexpr auto LOG_FILE = "logFile";
 
 struct ClientConfig {
     std::vector<std::string> ntp;
-    std::vector<std::string> cli;
+    std::map<std::string, std::string> testCommands;
     std::vector<std::string> parser;
     std::string maxAmpsVoltsFile;
     std::string logFile;

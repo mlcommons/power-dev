@@ -13,6 +13,9 @@
 // limitations under the License.
 // =============================================================================
 
+
+#include "./client.h"
+
 int receiveBuffer(int s, char *buffer, int bufferSize, int chunkSize = DEFAULT_BUFFER_CHUNK_SIZE) {
     int allReceivedBytes = 0;
     while (allReceivedBytes < bufferSize) {
@@ -87,21 +90,14 @@ void sendCommandToServer(int sock, const char *msg) {
     std::cout << "Send command to server: " << message << std::endl;
 }
 
-void sendInitialCommandToServer(int sock, bool isRangingMode, std::string fileName, float correctionFactor) {
-    InitMessage message;
-    message.messageNumber = isRangingMode ? RUN_RANGING : RUN;
+void sendMsg(int sock, std::string fileName) {
+    SaveLogMessage message;
+    message.code = RUN;
+    sprintf(message.fileName, fileName.c_str());
 
-    if (!isRangingMode) {
-        message.maxValues = getMaxAmpsVolts(fileName);
-        message.maxValues.maxAmps = message.maxValues.maxAmps * correctionFactor;
-        message.maxValues.maxVolts = message.maxValues.maxVolts * correctionFactor;
-    } else {
-        message.maxValues.maxAmps = 0;
-        message.maxValues.maxVolts = 0;
-    }
+    send(sock, (char *) &message, sizeof(SaveLogMessage), 0);
 
-    send(sock, (char *) &message, sizeof(InitMessage), 0);
-    std::cout << "Send command to server: " << message.messageNumber << std::endl;
+    std::cout << "Send command to server: " << message.fileName << std::endl;
 }
 
 void executeCommand(std::string command) {
@@ -116,10 +112,6 @@ void executeCommands(std::vector<std::string> commands){
     for (int i = 0; i < commands.size(); i++) {
         executeCommand(commands[i]);
     }
-}
-
-int checkIsNtpEnable() {
-    killProcessByName()
 }
 
 int main(int argc, char const *argv[]) {
@@ -176,26 +168,55 @@ int main(int argc, char const *argv[]) {
         std::cerr << "Invalid address/ Address not supported " << std::endl;
         return 1;
     }
+
     if (connect(sock, (struct sockaddr *) &ServerAddress, sizeof(ServerAddress)) < 0) {
         std::cerr << "Connection Failed " << std::endl << "Exit (1)" << std::endl;
     }
 
-    sendInitialCommandToServer(sock, isRangingMode, data.maxAmpsVoltsFile, data.correctionFactor);
+    std::map<std::string, std::string>::iterator itr;
+
+    sendCommandToServer(sock, START_RANGING);
+
+    for (itr = data.testCommands.begin(); itr != data.testCommands.end(); ++itr) {
+        sendCommandToServer(sock, RUN_STR);
+        receiveServerAnswer(sock);
+
+        executeCommand(itr->second);
+
+        sendCommandToServer(sock, STOP);
+        receiveServerAnswer(sock);
+
+        sendCommandToServer(sock, itr->first.c_str());
+        receiveServerAnswer(sock);
+
+        sleep(5);
+     }
+
+    sendCommandToServer(sock, START_TESTING);
+
+    sendCommandToServer(sock, START_TESTING);
     receiveServerAnswer(sock);
 
-    executeCommands(data.cli);
+    for (itr = data.testCommands.begin(); itr != data.testCommands.end(); ++itr) {
+        std::cout << sizeof(SaveLogMessage) << std::endl;
+        sendMsg(sock, itr->first.c_str());
+        receiveServerAnswer(sock);
 
-    sendCommandToServer(sock, STOP);
-    receiveServerAnswer(sock);
+        executeCommand(itr->second);
 
-    sendCommandToServer(sock, GET_FILE);
-    receiveFile(sock, data.logFile);
+        sendCommandToServer(sock, STOP);
+        receiveServerAnswer(sock);
 
-    if (isRangingMode) {
-        executeCommand(PYTHON_GET_MAX_VALUE + data.logFile + " -o " + data.maxAmpsVoltsFile);
-    } else {
-        executeCommands(data.parser);
+        sendCommandToServer(sock, GET_FILE);
+        receiveFile(sock, itr->first.c_str());
+
+        sleep(5);
     }
+
+
+//    sendCommandToServer(sock, GET_FILE);
+//    receiveFile(sock, data.logFile);
+
 
     return 0;
 }
