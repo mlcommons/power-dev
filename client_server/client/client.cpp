@@ -213,10 +213,7 @@ int main(int argc, char const *argv[]) {
         sleep(5);
     }
 
-
-//    sendCommandToServer(sock, GET_FILE);
-//    receiveFile(sock, data.logFile);
-
+    executeCommands(data.parser);
 
     return 0;
 }
