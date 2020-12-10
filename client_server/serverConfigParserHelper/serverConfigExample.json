@@ -1,0 +1,23 @@
+{
+  "ntpStartCommand": "w32tm.exe /resync",
+  "ptdPath": "D:\\work\\spec_ptd-main\\PTD\\ptd-windows-x86.exe",
+  "serialNumber": "C2PH13047V",
+  "ptdFlags": {
+    "port": 8888,
+    "quietMode": false,
+    "increaseGeneralDebugOutput": false,
+    "increaseMeterSpecificDebugOutput": false,
+    "logfile": "D:\\work\\c\\logs_ptdeamon.t",
+    "extendedLogFileFormat": true,
+    "debugOutputToFile": "",
+    "temperatureMode": false,
+    "voltageAutoRange": "",
+    "ampereAutoRange": "",
+    "baudRate": false,
+    "enableDcMeasurements": false,
+    "channelNumber": false,
+    "GpibInterface": false,
+    "GpibBoardNumber": false,
+    "useYokogawaUsbOrEthernetInterface": 49
+  }
+}

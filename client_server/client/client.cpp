@@ -1,37 +1,20 @@
-//Build command: g++ -o client client.cpp
+// Copyright 2018 The MLPerf Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// =============================================================================
 
-#include <stdio.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <string.h>
-#include <algorithm>
-#include <fstream>
-#include <netinet/tcp.h>
-#include <errno.h>
-#include <iostream>
-#include "./cxxopts/include/cxxopts.hpp"
 
-#define PYTHON_COMMAND "python3.8 parse_mlperf.py -pli logs.txt -lgi ./build"
-#define NTPD_COMMAND "sudo /usr/sbin/ntpdate time.windows.com"
-
-#define RUN "100"
-#define STOP "200"
-#define GET_FILE "500"
-
-#define DEFAULT_BUFFER_CHUNK_SIZE 4096
-#define DEFAULT_FILE_CHUNK_SIZE 65536
-#define DEFAULT_BUFLEN 512
-
-struct ServerAnswer {
-    int code;
-    char message[DEFAULT_BUFLEN];
-};
-
-struct InitMessage {
-    int messageNumber;
-    float averageFloat;
-};
+#include "./client.h"
 
 int receiveBuffer(int s, char *buffer, int bufferSize, int chunkSize = DEFAULT_BUFFER_CHUNK_SIZE) {
     int allReceivedBytes = 0;
@@ -107,19 +90,33 @@ void sendCommandToServer(int sock, const char *msg) {
     std::cout << "Send command to server: " << message << std::endl;
 }
 
-void sendInitialCommandToServer(int sock, bool isRangingMode) {
-    InitMessage message;
-    message.messageNumber = isRangingMode ? 100 : 101;
-    //TODO add func to get average
-    message.averageFloat = isRangingMode ? 0 : 2.1;
-    send(sock, (char *) &message, sizeof(InitMessage), 0);
-    std::cout << "Send command to server: " << message.messageNumber << std::endl;
+void sendMsg(int sock, std::string fileName) {
+    SaveLogMessage message;
+    message.code = RUN;
+    sprintf(message.fileName, fileName.c_str());
+
+    send(sock, (char *) &message, sizeof(SaveLogMessage), 0);
+
+    std::cout << "Send command to server: " << message.fileName << std::endl;
+}
+
+void executeCommand(std::string command) {
+    std::cerr << command << std::endl;
+    int returnCode = system(command.c_str());
+    if (returnCode != 0) {
+        std::cerr << "Could not execute " << command << std::endl;
+    }
+}
+
+void executeCommands(std::vector<std::string> commands){
+    for (int i = 0; i < commands.size(); i++) {
+        executeCommand(commands[i]);
+    }
 }
 
 int main(int argc, char const *argv[]) {
     std::string serverIpAddress;
     std::string configurationFile;
-    std::string logFile;
     int serverPort;
     bool isRangingMode = false;
 
@@ -130,7 +127,6 @@ int main(int argc, char const *argv[]) {
             ("i,serverIpAddress", "Server ip address", cxxopts::value<std::string>())
             ("c,configurationFile", "Client configuration file path",
              cxxopts::value<std::string>()->default_value("config.txt"))
-            ("l,ptdLogFilePath", "Path to save PTD logfile", cxxopts::value<std::string>()->default_value("logs.txt"))
             ("r,ranging", "Ranging mode", cxxopts::value<bool>()->default_value("false"))
             ("h,help", "Print usage");
 
@@ -152,9 +148,11 @@ int main(int argc, char const *argv[]) {
         return 1;
     }
 
-    logFile = result["ptdLogFilePath"].as<std::string>();
     serverPort = result["serverPort"].as<int>();
     configurationFile = result["configurationFile"].as<std::string>();
+
+    ClientConfig data = getClientConfig(configurationFile);
+    executeCommands(data.ntp);
 
     int sock = 0;
     struct sockaddr_in ServerAddress;
@@ -170,28 +168,52 @@ int main(int argc, char const *argv[]) {
         std::cerr << "Invalid address/ Address not supported " << std::endl;
         return 1;
     }
+
     if (connect(sock, (struct sockaddr *) &ServerAddress, sizeof(ServerAddress)) < 0) {
         std::cerr << "Connection Failed " << std::endl << "Exit (1)" << std::endl;
     }
 
-    int ntpStartedCode = system(NTPD_COMMAND);
-    if (ntpStartedCode != 0) {
-        std::cerr << "Can not start NTPd" << std::endl;
+    std::map<std::string, std::string>::iterator itr;
+
+    sendCommandToServer(sock, START_RANGING);
+
+    for (itr = data.testCommands.begin(); itr != data.testCommands.end(); ++itr) {
+        sendCommandToServer(sock, RUN_STR);
+        receiveServerAnswer(sock);
+
+        executeCommand(itr->second);
+
+        sendCommandToServer(sock, STOP);
+        receiveServerAnswer(sock);
+
+        sendCommandToServer(sock, itr->first.c_str());
+        receiveServerAnswer(sock);
+
+        sleep(5);
+     }
+
+    sendCommandToServer(sock, START_TESTING);
+
+    sendCommandToServer(sock, START_TESTING);
+    receiveServerAnswer(sock);
+
+    for (itr = data.testCommands.begin(); itr != data.testCommands.end(); ++itr) {
+        std::cout << sizeof(SaveLogMessage) << std::endl;
+        sendMsg(sock, itr->first.c_str());
+        receiveServerAnswer(sock);
+
+        executeCommand(itr->second);
+
+        sendCommandToServer(sock, STOP);
+        receiveServerAnswer(sock);
+
+        sendCommandToServer(sock, GET_FILE);
+        receiveFile(sock, itr->first.c_str());
+
+        sleep(5);
     }
 
-    sendInitialCommandToServer(sock, isRangingMode);
-    receiveServerAnswer(sock);
+    executeCommands(data.parser);
 
-    //TODO: move commands in config file
-    system("sudo dd if=/dev/sda of=/tmp/tt.dd bs=1M count=3500");
-    system("7zr a -t7z  -mx=9 -m0=LZMA2 -mmt8 /tmp/dd1.7z /tmp/tt.dd");
-
-    sendCommandToServer(sock, STOP);
-    receiveServerAnswer(sock);
-
-    sendCommandToServer(sock, GET_FILE);
-    receiveFile(sock, logFile);
-
-    system(PYTHON_COMMAND);
     return 0;
 }
