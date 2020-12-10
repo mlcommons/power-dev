@@ -42,9 +42,9 @@
 
 #include <stddef.h>
 
-#if defined(__clang__) || defined(__GNUC__)
+#if defined(__clang__) || (defined(__GNUC__) && !defined(_WIN32))
 #define json_weak __attribute__((weak))
-#elif defined(_MSC_VER)
+#elif defined(_MSC_VER) || defined(_WIN32)
 #define json_weak __inline
 #else
 #error Non clang, non gcc, non MSVC compiler found!

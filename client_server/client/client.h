@@ -16,26 +16,44 @@
 #ifndef POWER_CLIENT_H
 #define POWER_CLIENT_H
 
-#define RUN "100"
+#include <stdio.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <string.h>
+#include <algorithm>
+#include <fstream>
+#include <netinet/tcp.h>
+#include <errno.h>
+#include <iostream>
+#include "./../cxxopts/include/cxxopts.hpp"
+#include "clientConfigParser.h"
+#include "maxAmpsVoltsParser.h"
+#include <map>
+
+#define RUN 100
+#define RUN_STR "100"
+#define START_RANGING "300"
+#define START_TESTING "301"
 #define STOP "200"
 #define GET_FILE "500"
+#define SAVE_FILE 501
+#define PYTHON_GET_MAX_VALUE "python getMaxValues.py -spl "
+#define TMP_LOG_DIR "tmp"
 
 #define DEFAULT_BUFFER_CHUNK_SIZE 4096
 #define DEFAULT_FILE_CHUNK_SIZE 65536
 #define DEFAULT_BUFLEN 512
-
-#define NTPD_COMMAND "sudo /usr/sbin/ntpdate time.windows.com"
-
-
+#define FILE_NAME_SIZE 128
 
 struct ServerAnswer {
     int code;
     char message[DEFAULT_BUFLEN];
 };
 
-struct InitMessage {
-    int messageNumber;
-    float averageFloat;
+struct SaveLogMessage {
+    int code;
+    char fileName[FILE_NAME_SIZE];
 };
 
 #endif //POWER_CLIENT_H
