@@ -124,10 +124,18 @@ int startPtdClient() {
     return ConnectSocket;
 }
 
+void getCharFromString(std::string str, char* charArray){
+    for (int i = 0; i < str.length(); i++) {
+        charArray[i] = str[i];
+    }
+    charArray[str.length()] = '\0';
+}
+
 int __cdecl main(int argc, char const *argv[]) {
-    char ptdSetAmps[] = "SR,A,Auto\r\n";
+    char ptdSetAmpsAuto[] = "SR,A,Auto\r\n";
+    char ptdSetAmps[] = "SR,A,%f\r\n";
+    char ptdStartRanging[] = "Go,1000,0,%s\r\n";
     char ptdSetVolts[] = "SR,V,300\r\n";
-    char ptdGo[] = "Go,1000,0\r\n";
     char ptdStop[] = "Stop\r\n";
 
     cxxopts::Options options("Server for communication with PTD", "A brief description");
@@ -180,10 +188,7 @@ int __cdecl main(int argc, char const *argv[]) {
     PROCESS_INFORMATION piNtp;
 
     char ntpCommand[commands.ntp.length()];
-    for (int i = 0; i < commands.ntp.length(); i++) {
-        ntpCommand[i] = commands.ntp[i];
-    }
-
+    getCharFromString(commands.ntp, ntpCommand);
     executeSystemCommand(ntpCommand, &siNtp, &piNtp);
 
     ZeroMemory(&hints, sizeof(hints));
@@ -229,187 +234,99 @@ int __cdecl main(int argc, char const *argv[]) {
         WSACleanup();
         return 1;
     }
-    int ptdClientSocket;
 
     while (true) {
-        STARTUPINFO siPtd;
-        PROCESS_INFORMATION piPtd;
-
         ClientSocket = accept(ListenSocket, NULL, NULL);
         if (ClientSocket == INVALID_SOCKET) {
             std::cerr << "accept failed with error: " << WSAGetLastError() << "Exit (1)" << std::endl;
-            closesocket(ListenSocket);
+            closesocket(ClientSocket);
             WSACleanup();
             return 1;
         }
 
         iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-        if (iResult > 0) {
-            recvbuf[iResult] = '\0';
+        if (iResult < 0) {
+            //TODO: Add error msg
+            continue;
         }
 
-        if (atoi(recvbuf) == START_RANGING) {
-            if (std::filesystem::exists(std::string(TMP_LOG_DIR))){
-                std::filesystem::remove_all(std::string(TMP_LOG_DIR));
-            }
-            std::filesystem::create_directories(std::string(TMP_LOG_DIR));
-            std::string prevCommand = "";
+        StartTestMessage *msg = (StartTestMessage *) recvbuf;
 
-            while (true) {
-                iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-                recvbuf[iResult] = '\0';
-                std::cout << "Message from client: " << atoi(recvbuf) << std::endl;
-                if (atoi(recvbuf) == START_PTD) {
-                    DeleteFile(commands.logFile.c_str());
-                    char ptdCommand[commands.ptdStartCommand.length()];
-                    for (int i = 0; i < commands.ptdStartCommand.length(); i++) {
-                        ptdCommand[i] = commands.ptdStartCommand[i];
-                    }
-                    ptdCommand[commands.ptdStartCommand.length()] = '\0';
+        if (msg->code != START) {
+            //TODO: Send err msg
+            continue;
+        };
 
-                    bool is_ptd_started = executeSystemCommand(ptdCommand, &siPtd, &piPtd);
-                    if (!is_ptd_started) {
-                        char errMsg[] = "Can not start PTD";
-                        sentAnswer(ClientSocket, 1, errMsg);
-                    }
-                    ptdClientSocket = startPtdClient();
+        std::cout << commands.logFile << std::endl;
+        DeleteFile(commands.logFile.c_str());
 
-                    if (ptdClientSocket < 0) {
-                        char errMsg[] = "Can not open client socket for PTD";
-                        sentAnswer(ClientSocket, 1, errMsg);
-                    }
+        STARTUPINFO siPtd;
+        PROCESS_INFORMATION piPtd;
 
-                    if (prevCommand != std::string(ptdSetAmps)) {
-                        prevCommand = std::string(ptdSetAmps);
-                        sentMessage(ptdClientSocket, ptdSetAmps, strlen(ptdSetAmps));
-                        recvPtdAnswer(ptdClientSocket);
-                        std::cout << "Message to PTD: " << ptdSetAmps << std::endl;
-                        sentMessage(ptdClientSocket, ptdSetVolts, strlen(ptdSetVolts));
-                        recvPtdAnswer(ptdClientSocket);
-                        std::cout << "Message to PTD: " << ptdSetVolts << std::endl;
-                        Sleep(SLEEP_PTD_AFTER_CHANGING_RANGE);
-                    }
+        char ptdCommand[commands.ptdStartCommand.length()];
+        getCharFromString(commands.ptdStartCommand, ptdCommand);
 
-                    sentMessage(ptdClientSocket, ptdGo, strlen(ptdGo));
-                    std::cout << "Message to PTD: " << ptdGo << std::endl;
-                    recvPtdAnswer(ptdClientSocket);
-
-                    if (is_ptd_started && (ptdClientSocket > -1)) {
-                        char startMsg[] = "Start all needed processes";
-                        sentAnswer(ClientSocket, 0, startMsg);
-                    }
-                } else {
-                    break;
-                }
-
-                iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-                if (iResult > 0) {
-                    recvbuf[iResult] = '\0';
-
-                    std::cout << "Client command: " << recvbuf << std::endl;
-                    sentMessage(ptdClientSocket, ptdStop, strlen(ptdStop));
-                    closesocket(ptdClientSocket);
-                    WSACleanup();
-
-                    bool IsPtdDeamonClosed;
-                    IsPtdDeamonClosed = closeSystemProcess(&piPtd);
-                    if (!IsPtdDeamonClosed) {
-                        char msg[] = "Can not stop process daemon";
-                        sentAnswer(ClientSocket, 1, msg);
-                    } else {
-                        char msg[] = "Stop ptd.daemon";
-                        sentAnswer(ClientSocket, 0, msg);
-                    }
-                }
-
-                iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-                if (iResult > 0) {
-                    recvbuf[iResult] = '\0';
-                    std::filesystem::copy(commands.logFile, std::string(TMP_LOG_DIR) + std::string(recvbuf));
-                    char errMsg[] = "Copied file";
-                    sentAnswer(ClientSocket, 0, errMsg);
-                }
-            }
+        bool is_ptd_started = executeSystemCommand(ptdCommand, &siPtd, &piPtd);
+        if (!is_ptd_started) {
+            char errMsg[] = "Can not start PTD";
+            exit(0);
         }
 
-        iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-        if (iResult > 0) {
-            recvbuf[iResult] = '\0';
+
+        int ptdClientSocket = startPtdClient();
+        if (ptdClientSocket < 0) {
+            char errMsg[] = "Can not open client socket for PTD";
+            sentAnswer(ClientSocket, 1, errMsg);
+            exit(0);
         }
 
-        if (atoi(recvbuf) == START_TESTING) {
-            std::string prevCommand = "";
-            char startMsg[] = "Start testing";
+        if (is_ptd_started && (ptdClientSocket > -1)) {
+            char startMsg[] = "Start all needed processes";
             sentAnswer(ClientSocket, 0, startMsg);
+        }
 
-            system("python.exe getMaxValues.py");
-            std::map <std::string, MaxAmpsVolts> maxAmpsVolts = getMaxAmpsVolts("./maxAmpsVoltsValue.txt");
+        std::map <std::string, MaxAmpsVolts> maxAmpsVolts;
+        std::string prevCommand = "";
 
-            while (true) {
+        int workloadAmount = msg->workloadAmount;
+
+        for (int i = 0; i < MODE_AMOUNT; i++) {
+            std::cout << "Start " << (i == MODE_RANGING ? "ranging " : "testing ") << " mode" << std::endl;
+            for (int j = 0; j < workloadAmount; j++) {
+
                 iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-                recvbuf[iResult] = '\0';
-                SaveLogMessage *msg = (SaveLogMessage *) recvbuf;
-                if (msg->code == START_PTD) {
-                    DeleteFile(commands.logFile.c_str());
+                if (iResult > 0) {
+                    recvbuf[iResult] = '\0';
+                    StartLogMessage *startMsg = (StartLogMessage *) recvbuf;
+                    if (startMsg->code == START_LOG) {
+                        if (i == MODE_RANGING && prevCommand != std::string(ptdSetAmpsAuto)) {
+                            prevCommand = std::string(ptdSetAmpsAuto);
+                            sentMessage(ptdClientSocket, ptdSetAmpsAuto, strlen(ptdSetAmpsAuto));
+                            recvPtdAnswer(ptdClientSocket);
+                            std::cout << "Message to PTD: " << ptdSetAmpsAuto << std::endl;
+                            sentMessage(ptdClientSocket, ptdSetVolts, strlen(ptdSetVolts));
+                            recvPtdAnswer(ptdClientSocket);
+                            std::cout << "Message to PTD: " << ptdSetVolts << std::endl;
+                            Sleep(SLEEP_PTD_AFTER_CHANGING_RANGE);
+                        }
+                        if (i == MODE_TESTING) {
+                            char buffer[DEFAULT_BUFLEN];
+                            sprintf(buffer, ptdSetAmps, maxAmpsVolts[std::string(startMsg->workloadName)].maxAmps);
+                            if (prevCommand != std::string(buffer)) {
+                                prevCommand = std::string(buffer);
+                                sentMessage(ptdClientSocket, buffer, strlen(buffer));
+                                recvPtdAnswer(ptdClientSocket);
+                                std::cout << "Message to PTD: " << buffer << std::endl;
+                                Sleep(SLEEP_PTD_AFTER_CHANGING_RANGE);
+                            }
+                        }
 
-                    char ptdCommand[commands.ptdStartCommand.length()];
-                    for (int i = 0; i < commands.ptdStartCommand.length(); i++) {
-                        ptdCommand[i] = commands.ptdStartCommand[i];
-                    }
-                    ptdCommand[commands.ptdStartCommand.length()] = '\0';
-
-                    bool is_ptd_started = executeSystemCommand(ptdCommand, &siPtd, &piPtd);
-                    if (!is_ptd_started) {
-                        char errMsg[] = "Can not start PTD";
-                        sentAnswer(ClientSocket, 1, errMsg);
-                    }
-                    ptdClientSocket = startPtdClient();
-
-                    if (ptdClientSocket < 0) {
-                        char errMsg[] = "Can not open client socket for PTD";
-                        sentAnswer(ClientSocket, 1, errMsg);
-                    }
-
-                    char buffer[DEFAULT_BUFLEN];
-                    sprintf(buffer, "SR,A,%f\r\n", maxAmpsVolts[std::string(msg->fileName)].maxAmps);
-                    std::cout << "Command is: " << buffer << std::endl;
-
-                    if (prevCommand != std::string(buffer)) {
-                        prevCommand = std::string(buffer);
+                        char buffer[DEFAULT_BUFLEN];
+                        sprintf(buffer, ptdStartRanging, startMsg->workloadName);
                         sentMessage(ptdClientSocket, buffer, strlen(buffer));
                         std::cout << "Message to PTD: " << buffer << std::endl;
                         recvPtdAnswer(ptdClientSocket);
-                        Sleep(SLEEP_PTD_AFTER_CHANGING_RANGE);
-                    }
-
-                    sentMessage(ptdClientSocket, ptdGo, strlen(ptdGo));
-                    std::cout << "Message to PTD: " << ptdGo << std::endl;
-                    recvPtdAnswer(ptdClientSocket);
-
-                    if (is_ptd_started && (ptdClientSocket > -1)) {
-                        char startMsg[] = "Start all needed processes";
-                        sentAnswer(ClientSocket, 0, startMsg);
-                    }
-                } else {
-                    break;
-                }
-
-                iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-                if (iResult > 0) {
-                    recvbuf[iResult] = '\0';
-
-                    std::cout << "Client command: " << recvbuf << std::endl;
-                    sentMessage(ptdClientSocket, ptdStop, strlen(ptdStop));
-                    closesocket(ptdClientSocket);
-                    WSACleanup();
-
-                    bool IsPtdDeamonClosed;
-                    IsPtdDeamonClosed = closeSystemProcess(&piPtd);
-                    if (!IsPtdDeamonClosed) {
-                        char msg[] = "Can not stop process daemon";
-                        sentAnswer(ClientSocket, 1, msg);
-                    } else {
-                        char msg[] = "Stop ptd.daemon";
+                        char msg[] = "Start writing logs";
                         sentAnswer(ClientSocket, 0, msg);
                     }
                 }
@@ -417,33 +334,57 @@ int __cdecl main(int argc, char const *argv[]) {
                 iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
                 if (iResult > 0) {
                     recvbuf[iResult] = '\0';
-                    std::cout << "Client command: " << recvbuf << std::endl;
-                    SendFile(ClientSocket, commands.logFile);
+                    if (atoi(recvbuf) == STOP_LOG) {
+                        std::cout << "Client command: " << recvbuf << std::endl;
+                        sentMessage(ptdClientSocket, ptdStop, strlen(ptdStop));
+                        recvPtdAnswer(ptdClientSocket);
+                        char msg[] = "Stop writing logs";
+                        sentAnswer(ClientSocket, 0, msg);
+                    }
                 }
-
-
             }
+
+            if (i == MODE_RANGING) {
+                std::string script = std::string(MAX_AMPS_VOLTS_VALUE_SCRIPT) + " " + commands.logFile;
+
+                STARTUPINFO siScript;
+                PROCESS_INFORMATION piScript;
+
+                char scriptCommand[script.length()];
+                getCharFromString(script, scriptCommand);
+
+                executeSystemCommand(scriptCommand, &siScript, &piScript);
+                //TODO: Change INFINITE time?
+                WaitForSingleObject(piScript.hProcess, INFINITE);
+
+                CloseHandle(piScript.hProcess);
+                CloseHandle(piScript.hThread);
+
+                maxAmpsVolts = getMaxAmpsVolts(std::string(MAX_AMPS_VOLTS_VALUE_FILE));
+            } else {
+                SendFile(ClientSocket, commands.logFile);
+            }
+        }
+        closesocket(ptdClientSocket);
+        WSACleanup();
+
+        bool IsPtdDeamonClosed;
+        IsPtdDeamonClosed = closeSystemProcess(&piPtd);
+
+        if (!IsPtdDeamonClosed) {
+            std::cout << "Couldn't close PTD " << std::endl;
         }
     }
 
     iResult = shutdown(ClientSocket, SD_SEND);
     if (iResult == SOCKET_ERROR) {
-        std::cerr << "shutdown failed with error: " <<
-
-                  WSAGetLastError()
-
-                  << "Exit (1)" <<
-                  std::endl;
+        std::cerr << "shutdown failed with error: " << WSAGetLastError() << "Exit (1)" << std::endl;
         closesocket(ClientSocket);
-
         WSACleanup();
-
         return 1;
     }
 
-// cleanup
     closesocket(ClientSocket);
-
     WSACleanup();
 
     return 0;

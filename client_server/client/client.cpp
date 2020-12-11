@@ -13,7 +13,6 @@
 // limitations under the License.
 // =============================================================================
 
-
 #include "./client.h"
 
 int receiveBuffer(int s, char *buffer, int bufferSize, int chunkSize = DEFAULT_BUFFER_CHUNK_SIZE) {
@@ -83,21 +82,27 @@ void receiveServerAnswer(int sock) {
     }
 }
 
-void sendCommandToServer(int sock, const char *msg) {
+void sendMsgToServer(int sock, const char *msg) {
     char message[DEFAULT_BUFLEN];
     strcpy(message, msg);
     send(sock, message, strlen(message), 0);
     std::cout << "Send command to server: " << message << std::endl;
 }
 
-void sendMsg(int sock, std::string fileName) {
-    SaveLogMessage message;
-    message.code = RUN;
-    sprintf(message.fileName, fileName.c_str());
+void sendRunToServer(int sock, int workloadAmount) {
+    StartTestMessage message;
+    message.code = START;
+    message.workloadAmount = workloadAmount;
+    send(sock, (char *) &message, sizeof(StartTestMessage), 0);
+    std::cout << "Send command to server: " << message.code << std::endl;
+}
 
-    send(sock, (char *) &message, sizeof(SaveLogMessage), 0);
-
-    std::cout << "Send command to server: " << message.fileName << std::endl;
+void sendStartLoggingToServer(int sock, std::string workloadName) {
+    StartLogMessage message;
+    message.code = START_LOG;
+    sprintf(message.workloadName, workloadName.c_str());
+    send(sock, (char *) &message, sizeof(StartLogMessage), 0);
+    std::cout << "Send command to server: " << message.workloadName << std::endl;
 }
 
 void executeCommand(std::string command) {
@@ -108,7 +113,7 @@ void executeCommand(std::string command) {
     }
 }
 
-void executeCommands(std::vector<std::string> commands){
+void executeCommands(std::vector <std::string> commands) {
     for (int i = 0; i < commands.size(); i++) {
         executeCommand(commands[i]);
     }
@@ -151,9 +156,6 @@ int main(int argc, char const *argv[]) {
     serverPort = result["serverPort"].as<int>();
     configurationFile = result["configurationFile"].as<std::string>();
 
-    ClientConfig data = getClientConfig(configurationFile);
-    executeCommands(data.ntp);
-
     int sock = 0;
     struct sockaddr_in ServerAddress;
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -175,45 +177,26 @@ int main(int argc, char const *argv[]) {
 
     std::map<std::string, std::string>::iterator itr;
 
-    sendCommandToServer(sock, START_RANGING);
+    ClientConfig data = getClientConfig(configurationFile);
+    executeCommands(data.ntp);
 
-    for (itr = data.testCommands.begin(); itr != data.testCommands.end(); ++itr) {
-        sendCommandToServer(sock, RUN_STR);
-        receiveServerAnswer(sock);
-
-        executeCommand(itr->second);
-
-        sendCommandToServer(sock, STOP);
-        receiveServerAnswer(sock);
-
-        sendCommandToServer(sock, itr->first.c_str());
-        receiveServerAnswer(sock);
-
-        sleep(5);
-     }
-
-    sendCommandToServer(sock, START_TESTING);
-
-    sendCommandToServer(sock, START_TESTING);
+    sendRunToServer(sock, data.testCommands.size());
     receiveServerAnswer(sock);
 
-    for (itr = data.testCommands.begin(); itr != data.testCommands.end(); ++itr) {
-        std::cout << sizeof(SaveLogMessage) << std::endl;
-        sendMsg(sock, itr->first.c_str());
-        receiveServerAnswer(sock);
+    for (int i = 0; i < MODE_AMOUNT; i++) {
+        for (itr = data.testCommands.begin(); itr != data.testCommands.end(); ++itr) {
+            sendStartLoggingToServer(sock, itr->first);
+            receiveServerAnswer(sock);
 
-        executeCommand(itr->second);
+            executeCommand(itr->second);
 
-        sendCommandToServer(sock, STOP);
-        receiveServerAnswer(sock);
-
-        sendCommandToServer(sock, GET_FILE);
-        receiveFile(sock, itr->first.c_str());
-
-        sleep(5);
+            sendMsgToServer(sock, STOP_LOG);
+            receiveServerAnswer(sock);
+            system(("python cpLoadgenFiles.py -wn " + std::string(itr->first)).c_str()) + (i== MODE_RANGING ? "_ranging" : "_testing");
+        }
     }
 
-    executeCommands(data.parser);
+    receiveFile(sock, data.logFile);
 
     return 0;
 }
