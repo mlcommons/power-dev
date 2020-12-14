@@ -3,8 +3,6 @@
 	"testCommands": {"sudo dd if=/dev/sda of=/tmp/tt.dd bs=1M count=350": [],
       "sudo dd if=/dev/sda of=/tmp/tt.dd bs=1M count=360": []
     },
-    "parserCommand": "python3.8 parse_mlperf.py -pli logs.txt -lgi ./build",
-    "correctionFactor": 1.0,
-    "maxAmpsVoltsFilePath": "maxValues.txt",
+    "buildFolder": "./build",
     "logFile": "logs.txt"
 }

@@ -192,7 +192,13 @@ int main(int argc, char const *argv[]) {
 
             sendMsgToServer(sock, STOP_LOG);
             receiveServerAnswer(sock);
-            system(("python cpLoadgenFiles.py -wn " + std::string(itr->first)).c_str()) + (i== MODE_RANGING ? "_ranging" : "_testing");
+            std::string buildPath = "";
+            if (data.buildFolderPath.length() != 0) {
+                std::string buildPath = " -b " + data.buildFolderPath;
+            }
+
+            system(("python cpLoadgenFiles.py -wn " + std::string(itr->first) +
+                        ((i == MODE_RANGING) ? "_ranging" : "_testing") + buildPath).c_str());
         }
     }
 
