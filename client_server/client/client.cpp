@@ -131,7 +131,6 @@ int main(int argc, char const *argv[]) {
             ("i,serverIpAddress", "Server ip address", cxxopts::value<std::string>())
             ("c,configurationFile", "Client configuration file path",
              cxxopts::value<std::string>()->default_value("config.txt"))
-            ("r,ranging", "Ranging mode", cxxopts::value<bool>()->default_value("false"))
             ("h,help", "Print usage");
 
     auto result = options.parse(argc, argv);
