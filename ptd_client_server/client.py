@@ -21,7 +21,6 @@ import logging
 import os
 import socket
 import subprocess
-import sys
 import time
 
 import lib
@@ -43,7 +42,7 @@ with open(args.config, "r") as f:
 
 if os.path.exists(args.output):
     logging.fatal(f"The output directory {args.output!r} already exists.")
-    logging.fatal(f"Please remove it or select another directory.")
+    logging.fatal("Please remove it or select another directory.")
     exit(1)
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -86,30 +85,30 @@ for mode in ["ranging", "testing"]:
             env["ranging"] = "1" if mode == "ranging" else "0"
             env["out"] = out
 
-            logging.info(f"Running runBefore")
+            logging.info("Running runBefore")
             subprocess.run(config["runBefore"], shell=True, check=True, env=env)
 
             if serv.command(f"start-{mode},{workload['name']}-{n}") != "OK":
                 exit(1)
 
-            logging.info(f"Running runWorkload")
+            logging.info("Running runWorkload")
             subprocess.run(config["runWorkload"], shell=True, check=True, env=env)
 
-            if serv.command(f"stop") != "OK":
+            if serv.command("stop") != "OK":
                 exit(1)
 
-            log = serv.command(f"get-last-log")
+            log = serv.command("get-last-log")
             if log is None or not log.startswith("base64 "):
                 exit(1)
             with open(out + "/spl.txt", "wb") as f:
                 f.write(base64.b64decode(log[len("base64 ") :]))
 
-            logging.info(f"Running runAfter")
+            logging.info("Running runAfter")
             subprocess.run(config["runAfter"], shell=True, check=True, env=env)
 
 logging.info("Done runs")
 
-log = serv.command(f"get-log")
+log = serv.command("get-log")
 if log is None or not log.startswith("base64 "):
     exit(1)
 

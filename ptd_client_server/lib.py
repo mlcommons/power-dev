@@ -15,8 +15,6 @@
 
 from typing import Optional
 import socketserver
-import sys
-import traceback
 import logging
 
 
