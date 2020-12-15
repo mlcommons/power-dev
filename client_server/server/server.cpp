@@ -360,10 +360,11 @@ int __cdecl main(int argc, char const *argv[]) {
                 CloseHandle(piScript.hThread);
 
                 maxAmpsVolts = getMaxAmpsVolts(std::string(MAX_AMPS_VOLTS_VALUE_FILE));
-            } else {
-                SendFile(ClientSocket, commands.logFile);
             }
         }
+
+        SendFile(ClientSocket, commands.logFile);
+
         closesocket(ptdClientSocket);
         WSACleanup();
 
