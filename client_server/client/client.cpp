@@ -179,6 +179,9 @@ int main(int argc, char const *argv[]) {
 
     for (int i = 0; i < MODE_AMOUNT; i++) {
         for (itr = data.testCommands.begin(); itr != data.testCommands.end(); ++itr) {
+
+            std::cout << "Name " << itr->first << " is using for command \"" << itr->second << "\"" << std::endl;
+
             sendStartLoggingToServer(sock, itr->first);
             receiveServerAnswer(sock);
 
