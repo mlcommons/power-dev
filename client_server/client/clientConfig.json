@@ -1,8 +1,9 @@
 {
-	"ntpStartCommand": "sudo /usr/sbin/ntpdate time.windows.com",
-	"testCommands": {"sudo dd if=/dev/sda of=/tmp/tt.dd bs=1M count=350": [],
-      "sudo dd if=/dev/sda of=/tmp/tt.dd bs=1M count=360": []
-    },
-    "buildFolder": "./build",
-    "logFile": "logs.txt"
+  "ntpStartCommand": "sudo /usr/sbin/ntpdate time.windows.com",
+  "testCommands": {
+    "sudo dd if=/dev/sda of=/tmp/tt.dd bs=1M count=350": [],
+    "sudo dd if=/dev/sda of=/tmp/tt.dd bs=1M count=360": []
+  },
+  "buildFolder": "./build",
+  "logFile": "logs.txt"
 }

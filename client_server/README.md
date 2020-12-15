@@ -22,20 +22,37 @@ make
 ```bash
 #client
 ./client -i 192.168.104.169 -c clientConfig.json
+./client options:
+
+  -p, --serverPort arg         Server port (default: 4950)
+  -i, --serverIpAddress arg    Server ip address
+  -c, --configurationFile arg  Client configuration file path (default:
+                               config.txt)
+  -h, --help                   Print usage
+
+
 #server
 .\server.exe -i 192.168.104.169 -c .\serverConfig.json
+
+server.exe options:
+
+  -p, --serverPort arg          Server port (default: 4950)
+  -i, --ipAddress arg           Server ip address
+  -c, --ptdConfigurationFile arg
+                                PTD configuration file path (default: config.txt)
+  -h, --help                    Print usage
 
 ```
 ## Example of configuration file for client.
 ```json
 {
-	"ntpStartCommand": "sudo /usr/sbin/ntpdate time.windows.com",
-	"testCommands": ["sudo dd if=/dev/sda of=/tmp/tt.dd bs=1M count=3500",
-                     "sudo 7zr a -t7z  -mx=9 -m0=LZMA2 -mmt8 /tmp/dd1.7z /tmp/tt.dd"],
-    "parserCommand": "python3.8 parse_mlperf.py -pli logs.txt -lgi ./build",
-    "correctionFactor": 1.0,
-    "maxAmpsVoltsFilePath": "maxValues.txt",
-    "logFile": "logs.txt"
+  "ntpStartCommand": "sudo /usr/sbin/ntpdate time.windows.com",
+  "testCommands": {
+    "sudo dd if=/dev/sda of=/tmp/tt.dd bs=1M count=350": [],
+    "sudo dd if=/dev/sda of=/tmp/tt.dd bs=1M count=360": []
+  },
+  "buildFolder": "./build",
+  "logFile": "logs.txt"
 }
 
 ```
@@ -61,7 +78,7 @@ make
     "channelNumber": false,
     "GpibInterface": false,
     "GpibBoardNumber": false,
-    "useYokogawaUsbOrEthernetInterface": 49
+    "useYokogawaUsbOrEthernetInterface": "49"
   }
 }
 
