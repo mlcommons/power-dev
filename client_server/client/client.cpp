@@ -123,7 +123,6 @@ int main(int argc, char const *argv[]) {
     std::string serverIpAddress;
     std::string configurationFile;
     int serverPort;
-    bool isRangingMode = false;
 
     cxxopts::Options options("PTD client", "A brief description");
 
@@ -140,10 +139,6 @@ int main(int argc, char const *argv[]) {
     if (result.count("help")) {
         std::cout << options.help() << std::endl;
         exit(0);
-    }
-
-    if (result.count("ranging")) {
-        isRangingMode = true;
     }
 
     if (result.count("serverIpAddress")) {
