@@ -18,6 +18,6 @@
     "channelNumber": false,
     "GpibInterface": false,
     "GpibBoardNumber": false,
-    "useYokogawaUsbOrEthernetInterface": 49
+    "useYokogawaUsbOrEthernetInterface": "49"
   }
 }

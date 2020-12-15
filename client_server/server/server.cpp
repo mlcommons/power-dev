@@ -272,7 +272,6 @@ int __cdecl main(int argc, char const *argv[]) {
             exit(0);
         }
 
-
         int ptdClientSocket = startPtdClient();
         if (ptdClientSocket < 0) {
             char errMsg[] = "Can not open client socket for PTD";
