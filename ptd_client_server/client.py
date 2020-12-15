@@ -32,7 +32,7 @@ parser = argparse.ArgumentParser(description="PTD client")
 
 # fmt: off
 parser.add_argument("-p", "--serverPort", metavar="PORT", type=int, help="Server port", default=4950)
-parser.add_argument("-i", "--serverIpAddress", metavar="IP", type=str, help="Server IP address")
+parser.add_argument("-i", "--serverIpAddress", metavar="ADDR", type=str, help="Server IP address", required=True)
 parser.add_argument("-c", "--config", metavar="FILE", type=str, help="Client configuration file path", default="./client.conf")
 parser.add_argument("-o", "--output", metavar="DIR", type=str, help="Output directory", default="out")
 # fmt: on
@@ -40,6 +40,11 @@ parser.add_argument("-o", "--output", metavar="DIR", type=str, help="Output dire
 args = parser.parse_args()
 with open(args.config, "r") as f:
     config = json.load(f)
+
+if os.path.exists(args.output):
+    logging.fatal(f"The output directory {args.output!r} already exists.")
+    logging.fatal(f"Please remove it or select another directory.")
+    exit(1)
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.connect((args.serverIpAddress, args.serverPort))
