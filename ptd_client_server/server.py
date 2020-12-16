@@ -17,7 +17,6 @@
 from __future__ import annotations
 from typing import Optional, Dict, Tuple, List
 from decimal import Decimal
-from functools import partial
 import argparse
 import base64
 import json
@@ -25,9 +24,7 @@ import logging
 import os
 import re
 import socket
-import socketserver
 import subprocess
-import sys
 import time
 
 import lib
@@ -208,8 +205,8 @@ class Server:
                 return "Error"
             return "OK"
         if cmd[0] == "start-ranging" and len(cmd) == 2:
-            self._ptd.cmd(f"SR,V,300")
-            self._ptd.cmd(f"SR,A,Auto")
+            self._ptd.cmd("SR,V,300")
+            self._ptd.cmd("SR,A,Auto")
             time.sleep(10)
             logging.info("Starting ranging mode")
             self._ptd.cmd(f"Go,1000,0,ranging-{cmd[1]}")
@@ -218,7 +215,7 @@ class Server:
             return "OK"
         if cmd[0] == "start-testing" and len(cmd) == 2:
             maxVolts, maxAmps = self._ranging_table[cmd[1]]
-            self._ptd.cmd(f"SR,V,300")
+            self._ptd.cmd("SR,V,300")
             self._ptd.cmd(f"SR,A,{maxAmps}")
             time.sleep(10)  # TODO: sleep only if maxAmps changes
             logging.info("Starting testing mode")

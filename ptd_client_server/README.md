@@ -35,7 +35,7 @@ Client configuration:
 
 ```javascript
 {
-  // An command
+  // An command to run after connecting to the server.
   "ntpCommand": "sudo /usr/sbin/ntpdate time.windows.com || true",
 
   // The following are three shell commands to be executed for each workload and setting.
