@@ -19,7 +19,7 @@ from typing import Optional, Dict, Tuple, List
 from decimal import Decimal
 import argparse
 import base64
-import json
+import configparser
 import logging
 import os
 import re
@@ -69,12 +69,12 @@ def read_log(log_fname: str, mark: str) -> str:
 
 class ServerConfig:
     def __init__(self, filename: str) -> None:
-        with open(filename, "r") as f:
-            j = json.load(f)
-        self.ntp_command = j["ntpCommand"]
-        self.ptd_command = j["ptdCommand"]
-        self.ptd_port = j["ptdPort"]
-        self.ptd_logfile = j["ptdLogfile"]
+        c = configparser.ConfigParser()
+        c.read_file(open(filename))
+        self.ntp_command = c["server"]["ntpCommand"]
+        self.ptd_command = c["server"]["ptdCommand"]
+        self.ptd_port = c.getint("server", "ptdPort")
+        self.ptd_logfile = c["server"]["ptdLogfile"]
 
 
 class Ptd:
@@ -88,7 +88,7 @@ class Ptd:
     def start(self) -> bool:
         if self._process is not None:
             return False
-        self._process = subprocess.Popen(self._command, shell=True)
+        self._process = subprocess.Popen(self._command, shell=(os.name == "posix"))
 
         retries = 100
         s = None
