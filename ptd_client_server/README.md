@@ -34,14 +34,16 @@ If you'll use these examples, make sure you'll remove all comments starting with
 Client configuration:
 
 ```javascript
+// Note that the same options could be set using command line.
+// See ./client.py --help for the reference.
 {
   // An command to run after connecting to the server.
   "ntpCommand": "sudo /usr/sbin/ntpdate time.windows.com || true",
 
-  // The following are three shell commands to be executed for each workload and setting.
+  // The following are three shell commands to be executed.
+  // These commands would be executed twice, in the ranging, and in the testing modes.
   // Each command have the following environment variables:
-  //   "$workload" - workload name (which is specified in this file)
-  //   "$setting"  - a setting for the current workload (which is specified in this file)
+  //   "$ranging"  - "1" in the ranging mode, or "0" in the testing mode
   //   "$out"      - path to the output directory for this run
 
   // A command to run before power measurement.
@@ -57,19 +59,7 @@ Client configuration:
   // A cleanup or some log processing could be done here, if necessary.
   // Here is an example of a command that copies loadgen logs to the output directory.
   "runAfter":
-    "mkdir -p -- \"$out\"/loadgen/gnmt; cp -a -- ~/loadgen/benchmark/build/mlperf* \"$out\"/loadgen/gnmt",
-
-
-  // A list of workloads.
-  // Each workload has a name and a list of settings.
-  "workloads": [
-     { "name": "W1",
-       "settings": [ "S1", "S2" ]
-     },
-     { "name": "W2",
-       "settings": [ "S3", "S4", "S5" ]
-     }
-  ]
+    "mkdir -p -- \"$out\"/loadgen/gnmt; cp -a -- ~/loadgen/benchmark/build/mlperf* \"$out\"/loadgen/gnmt"
 }
 ```
 

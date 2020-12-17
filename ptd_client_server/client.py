@@ -30,15 +30,65 @@ lib.init("client")
 parser = argparse.ArgumentParser(description="PTD client")
 
 # fmt: off
-parser.add_argument("-p", "--serverPort", metavar="PORT", type=int, help="Server port", default=4950)
-parser.add_argument("-i", "--serverIpAddress", metavar="ADDR", type=str, help="Server IP address", required=True)
-parser.add_argument("-c", "--config", metavar="FILE", type=str, help="Client configuration file path", default="./client.conf")
-parser.add_argument("-o", "--output", metavar="DIR", type=str, help="Output directory", default="out")
+parser.add_argument(
+    "-c", "--config", metavar="FILE", type=str,
+    help="""
+        Client configuration file path.
+        Note that the same options could be configured through the command line.
+    """)
+parser.add_argument(
+    "-p", "--serverPort", metavar="PORT", type=int, default=4950,
+    help="Server port")
+parser.add_argument(
+    "-i", "--serverIpAddress", metavar="ADDR", type=str, required=True,
+    help="Server IP address")
+parser.add_argument(
+    "-o", "--output", metavar="DIR", type=str, default="out",
+    help="Output directory")
+parser.add_argument(
+    "--ntp-command", metavar="CMD", type=str,
+    help="""A command to run after connecting to the server.""")
+parser.add_argument(
+    "--run-before", metavar="CMD", type=str,
+    help="""
+        A command to run before power measurement.
+        Some preparation could be done here, if necessary.
+    """)
+parser.add_argument(
+    "--run-workload", metavar="CMD", type=str,
+    help="""
+        A command to run under power measurement.
+        An actual workload should be done here.
+    """)
+parser.add_argument(
+    "--run-after", metavar="CMD", type=str,
+    help="""
+        A command to run after power measurement is done.
+        A cleanup or some log processing could be done here, if necessary.
+    """)
 # fmt: on
 
 args = parser.parse_args()
-with open(args.config, "r") as f:
-    config = json.load(f)
+if args.config is not None:
+    with open(args.config, "r") as f:
+        config = json.load(f)
+else:
+    config = {}
+
+if args.run_before is None:
+    args.run_before = config.get("runBefore", "")
+
+if args.run_workload is None:
+    args.run_workload = config.get("runWorkload", None)
+if args.run_workload is None:
+    logging.fatal("--run-workload option is mandatory")
+    exit(1)
+
+if args.run_after is None:
+    args.run_after = config.get("runAfter", "")
+
+if args.ntp_command is None:
+    args.ntp_command = config.get("ntpCommand", "")
 
 if os.path.exists(args.output):
     logging.fatal(f"The output directory {args.output!r} already exists.")
@@ -56,8 +106,8 @@ if serv.command("hello") != "Hello from server!":
 logging.info(f"Creating output directory {args.output!r}")
 os.mkdir(args.output)
 
-logging.info(f"Running {config['ntpCommand']!r}")
-subprocess.run(config["ntpCommand"], shell=True, check=True)
+logging.info(f"Running {args.ntp_command!r}")
+subprocess.run(args.ntp_command, shell=True, check=True)
 
 if serv.command("init") != "OK":
     exit(1)
@@ -70,41 +120,35 @@ dt2 = 1000 * (client_time2 - serv_time)
 logging.info(f"The time difference is in {dt1:.3}ms..{dt2:.3}ms")
 
 for mode in ["ranging", "testing"]:
-    for workload in config["workloads"]:
-        logging.info(f"Running workload {workload['name']!r} in mode {mode!r}")
+    logging.info(f"Running workload in {mode} mode")
+    out = f"{args.output}/{mode}"
 
-        for n, setting in enumerate(workload["settings"]):
-            out = f"{args.output}/{workload['name']}-{n}-{mode}/"
+    os.mkdir(out)
 
-            os.mkdir(out)
+    env = os.environ.copy()
+    env["ranging"] = "1" if mode == "ranging" else "0"
+    env["out"] = out
 
-            env = os.environ.copy()
-            env["workload"] = workload["name"]
-            env["run"] = str(n)
-            env["setting"] = setting
-            env["ranging"] = "1" if mode == "ranging" else "0"
-            env["out"] = out
+    logging.info("Running runBefore")
+    subprocess.run(args.run_before, shell=True, check=True, env=env)
 
-            logging.info("Running runBefore")
-            subprocess.run(config["runBefore"], shell=True, check=True, env=env)
+    if serv.command(f"start-{mode},workload") != "OK":
+        exit(1)
 
-            if serv.command(f"start-{mode},{workload['name']}-{n}") != "OK":
-                exit(1)
+    logging.info("Running runWorkload")
+    subprocess.run(args.run_workload, shell=True, check=True, env=env)
 
-            logging.info("Running runWorkload")
-            subprocess.run(config["runWorkload"], shell=True, check=True, env=env)
+    if serv.command("stop") != "OK":
+        exit(1)
 
-            if serv.command("stop") != "OK":
-                exit(1)
+    log = serv.command("get-last-log")
+    if log is None or not log.startswith("base64 "):
+        exit(1)
+    with open(out + "/spl.txt", "wb") as f:
+        f.write(base64.b64decode(log[len("base64 ") :]))
 
-            log = serv.command("get-last-log")
-            if log is None or not log.startswith("base64 "):
-                exit(1)
-            with open(out + "/spl.txt", "wb") as f:
-                f.write(base64.b64decode(log[len("base64 ") :]))
-
-            logging.info("Running runAfter")
-            subprocess.run(config["runAfter"], shell=True, check=True, env=env)
+    logging.info("Running runAfter")
+    subprocess.run(args.run_after, shell=True, check=True, env=env)
 
 logging.info("Done runs")
 
