@@ -76,21 +76,20 @@ Client configuration:
 
 Server configuration:
 
-```javascript
-{
-  // An command to run when a client connects.
-  // Here is an example of a command for Windows that enables NTP service and triggers a resync.
-  "ntpCommand": "w32tm /resync || ( net start w32time && w32tm /resync )",
+```
+[server]
+# An command to run when a client connects.
+# Here is an example of a command for Windows that enables NTP service and triggers a resync.
+ntpCommand: w32tm /resync || ( net start w32time && w32tm /resync )
 
-  // A command to run PTDaemon.
-  "ptdCommand": "D:\\PTD\\ptd-windows-x86.exe -p 8888 -l D:\\logs_ptdeamon.txt -e -y 49 C2PH13047V",
+# A command to run PTDaemon.
+ptdCommand: D:\work\spec_ptd-main\PTD\ptd-windows-x86.exe -p 8888 -l D:\logs_ptdeamon.txt -e -y 49 C2PH13047V
 
-  // A port on that PTDaemon listens.
-  // Should be in sync with "ptdCommand".
-  "ptdPort": 8888,
+# A port on that PTDaemon listens.
+# Should be in sync with "ptdCommand".
+ptdPort: 8888
 
-  // A path to a logfile that PTDaemon produces.
-  // Should be in sync with "ptdCommand".
-  "ptdLogfile": "D:\\logs_ptdeamon.txt"
-}
+# A path to a logfile that PTDaemon produces.
+# Should be in sync with "ptdCommand".
+ptdLogfile: D:\logs_ptdeamon.txt
 ```

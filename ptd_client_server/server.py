@@ -71,10 +71,10 @@ class ServerConfig:
     def __init__(self, filename: str) -> None:
         c = configparser.ConfigParser()
         c.read_file(open(filename))
-        self.ntp_command = c["CONFIGURATION"]["ntpCommand"]
-        self.ptd_command = c["CONFIGURATION"]["ptdCommand"]
-        self.ptd_port = c.getint("CONFIGURATION", "ptdPort")
-        self.ptd_logfile = c["CONFIGURATION"]["ptdLogfile"]
+        self.ntp_command = c["server"]["ntpCommand"]
+        self.ptd_command = c["server"]["ptdCommand"]
+        self.ptd_port = c.getint("server", "ptdPort")
+        self.ptd_logfile = c["server"]["ptdLogfile"]
 
 
 class Ptd:
@@ -88,7 +88,7 @@ class Ptd:
     def start(self) -> bool:
         if self._process is not None:
             return False
-        self._process = subprocess.Popen(self._command, shell=True)
+        self._process = subprocess.Popen(self._command, shell=(os.name == "posix"))
 
         retries = 100
         s = None
