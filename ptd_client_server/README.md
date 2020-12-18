@@ -53,7 +53,7 @@ Client configuration:
   // A command to run under power measurement.
   // An actual workload should be done here.
   "runWorkload":
-    "cd ~/loadgen/benchmark; build/repro.exe $setting",
+    "cd ~/loadgen/benchmark; build/repro.exe 800000 0 4 2048",
 
   // A command to run after power measurement is done.
   // A cleanup or some log processing could be done here, if necessary.
