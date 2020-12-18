@@ -215,7 +215,7 @@ class Server:
             return "OK"
         if cmd[0] == "start-testing" and len(cmd) == 2:
             maxVolts, maxAmps = self._ranging_table[cmd[1]]
-            self._ptd.cmd("SR,V,300")
+            self._ptd.cmd(f"SR,V,{maxVolts}")
             self._ptd.cmd(f"SR,A,{maxAmps}")
             time.sleep(10)  # TODO: sleep only if maxAmps changes
             logging.info("Starting testing mode")
