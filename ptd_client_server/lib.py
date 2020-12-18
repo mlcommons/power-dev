@@ -13,9 +13,10 @@
 # limitations under the License.
 # =============================================================================
 
-from typing import Optional
-import socketserver
+from typing import Callable, Optional
 import logging
+import socket
+import socketserver
 
 
 class Proto:
@@ -23,7 +24,7 @@ class Proto:
     # TODO: escape/unescape binary data?
     # TODO: b"\n" only (nc)
 
-    def __init__(self, conn) -> None:
+    def __init__(self, conn: socket.socket) -> None:
         self._buf = b""
         self._x = conn
 
@@ -47,9 +48,9 @@ class Proto:
         return self.recv()
 
 
-def run_server(host: str, port: int, handle) -> None:
+def run_server(host: str, port: int, handle: Callable[[Proto], None]) -> None:
     class Handler(socketserver.BaseRequestHandler):
-        def handle(self):
+        def handle(self) -> None:
             logging.info(f"Connected {self.client_address}")
             p = Proto(self.request)
             try:

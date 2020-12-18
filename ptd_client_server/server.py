@@ -15,7 +15,7 @@
 # =============================================================================
 
 from __future__ import annotations
-from typing import Optional, Dict, Tuple, List
+from typing import Optional, Dict, Tuple
 from decimal import Decimal
 import argparse
 import base64
@@ -78,7 +78,7 @@ class ServerConfig:
 
 
 class Ptd:
-    def __init__(self, command: List[str], port: int) -> None:
+    def __init__(self, command: str, port: int) -> None:
         self._process: Optional[subprocess.Popen[bytes]] = None
         self._socket: Optional[socket.socket] = None
         self._proto: Optional[lib.Proto] = None

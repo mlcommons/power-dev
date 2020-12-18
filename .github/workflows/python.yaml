@@ -25,10 +25,10 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install dependencies
+    - name: Install CI dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 black
+        pip install flake8 black mypy
 
     - name: Lint with flake8
       run: |
@@ -41,4 +41,9 @@ jobs:
     - name: Check code formatting with black
       run: |
         cd ptd_client_server
-        black --check .
+        black --check --diff .
+
+    - name: Check typing with mypy
+      run: |
+        cd ptd_client_server
+        mypy --allow-redefinition --strict --pretty .
