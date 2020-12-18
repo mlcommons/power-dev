@@ -15,8 +15,11 @@
 
 from typing import Callable, Optional
 import logging
+import os
 import socket
 import socketserver
+import subprocess
+import sys
 
 
 class Proto:
@@ -73,3 +76,56 @@ def init(name: str) -> None:
     logging.basicConfig(
         level=logging.INFO, format=f"{name} %(asctime)s [%(levelname)s] %(message)s"
     )
+
+
+def ntp_sync(server: Optional[str]) -> None:
+    if server == "" or server is None:
+        logging.info("No NTP server configured. Skipping NTP sync.")
+        return
+
+    logging.info(f"Synchronizing with {server!r} time using NTP...")
+
+    if sys.platform == "win32":
+        try:
+            subprocess.run("w32tm /register", check=True)
+
+            # Do not check for the error: it may be already running.
+            subprocess.run("net start w32time")
+
+            subprocess.run(
+                [
+                    "w32tm",
+                    "/config",
+                    "/syncfromflags:manual",
+                    "/update",
+                    f"/manualpeerlist:{server},0x8",
+                ],
+                check=True,
+            )
+
+            subprocess.run("w32tm /resync", check=True)
+
+            logging.info("w32tm /stripchart output:")
+            subprocess.run(
+                [
+                    "w32tm",
+                    "/stripchart",
+                    "/dataonly",
+                    "/samples:1",
+                    f"/computer:{server}",
+                ],
+                check=True,
+            )
+        except Exception:
+            logging.error("Could not sync time using windows time service.")
+            raise
+    else:
+        command = ["ntpdate", "-b", "--", server]
+        if os.getuid() != 0:
+            command = ["sudo", "-n"] + command
+
+        try:
+            subprocess.run(command, input="", check=True)
+        except Exception:
+            logging.error("Could not sync time using ntpd.")
+            raise
