@@ -22,6 +22,7 @@ import os
 import socket
 import subprocess
 import time
+import zipfile
 
 import lib
 
@@ -48,6 +49,15 @@ def command_get_file(server: lib.Proto, command: str, save_name: str) -> None:
     with open(save_name, "wb") as f:
         f.write(base64.b64decode(log[len("base64 ") :]))
     logging.info(f"Saving response to {save_name!r}")
+
+
+def create_zip(zip_filename: str, dirname: str) -> None:
+    with zipfile.ZipFile(zip_filename, "x") as zf:
+        for folderName, subfolders, filenames in os.walk(dirname):
+            for filename in filenames:
+                filePath = os.path.join(folderName, filename)
+                zipPath = os.path.relpath(filePath, dirname)
+                zf.write(filePath, zipPath)
 
 
 lib.init("client")
@@ -91,6 +101,12 @@ parser.add_argument(
         A command to run after power measurement is done.
         A cleanup or some log processing could be done here, if necessary.
     """)
+parser.add_argument(
+    "--label", metavar="LABEL", type=str,
+    help="""
+        Optional label to include to the output sent to the server.
+        If set, this label would be included in the directory name.
+    """)
 # fmt: on
 
 args = parser.parse_args()
@@ -114,6 +130,14 @@ if args.run_after is None:
 
 if args.ntp_server is None:
     args.ntp_server = config.get("ntpServer")
+
+if args.label is not None:
+    if not lib.check_label(args.label):
+        logging.fatal("Error: invalid label {args.label!r}")
+        exit(1)
+    log_name_prefix = args.label + "-"
+else:
+    log_name_prefix = ""
 
 if os.path.exists(args.output):
     logging.fatal(f"The output directory {args.output!r} already exists.")
@@ -169,6 +193,13 @@ for mode in ["ranging", "testing"]:
     if args.run_after is not None:
         logging.info("Running runAfter")
         subprocess.run(args.run_after, shell=True, check=True, env=env)
+
+    logging.info("Packing logs into zip and uploading to the server")
+    create_zip(f"{out}.zip", out)
+    serv.send(f"push-log,{log_name_prefix}{mode}")
+    serv.send_file(f"{out}.zip")
+    logging.info(serv.recv())
+
 
 logging.info("Done runs")
 
