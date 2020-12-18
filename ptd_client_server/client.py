@@ -25,6 +25,31 @@ import time
 
 import lib
 
+
+def command(server: lib.Proto, command: str, check: bool = False) -> str:
+    logging.info(f"Sending command to the server: {command!r}")
+    response = server.command(command)
+    if response is None:
+        logging.fatal("The server is disconnected")
+        exit(1)
+    logging.info(f"Got response: {response!r}")
+    if check and response != "OK":
+        logging.fatal("Got an unexpecting response from the server")
+        exit(1)
+    return response
+
+
+def command_get_file(server: lib.Proto, command: str, save_name: str) -> None:
+    logging.info(f"Sending command to the server: {command!r}")
+    log = serv.command(command)
+    if log is None or not log.startswith("base64 "):
+        logging.fatal("Could not get file from the server")
+        exit(1)
+    with open(save_name, "wb") as f:
+        f.write(base64.b64decode(log[len("base64 ") :]))
+    logging.info(f"Saving response to {save_name!r}")
+
+
 lib.init("client")
 
 parser = argparse.ArgumentParser(description="PTD client")
@@ -99,7 +124,7 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.connect((args.serverIpAddress, args.serverPort))
 serv = lib.Proto(s)
 
-if serv.command("hello") != "Hello from server!":
+if command(serv, "hello") != "Hello from server!":
     logging.fatal("Not a server")
     exit(1)
 
@@ -109,11 +134,10 @@ os.mkdir(args.output)
 logging.info(f"Running {args.ntp_command!r}")
 subprocess.run(args.ntp_command, shell=True, check=True)
 
-if serv.command("init") != "OK":
-    exit(1)
+command(serv, "init", check=True)
 
 client_time1 = time.time()
-serv_time = float(serv.command("time"))
+serv_time = float(command(serv, "time"))
 client_time2 = time.time()
 dt1 = 1000 * (client_time1 - serv_time)
 dt2 = 1000 * (client_time2 - serv_time)
@@ -132,31 +156,20 @@ for mode in ["ranging", "testing"]:
     logging.info("Running runBefore")
     subprocess.run(args.run_before, shell=True, check=True, env=env)
 
-    if serv.command(f"start-{mode},workload") != "OK":
-        exit(1)
+    command(serv, f"start-{mode},workload", check=True)
 
     logging.info("Running runWorkload")
     subprocess.run(args.run_workload, shell=True, check=True, env=env)
 
-    if serv.command("stop") != "OK":
-        exit(1)
+    command(serv, "stop", check=True)
 
-    log = serv.command("get-last-log")
-    if log is None or not log.startswith("base64 "):
-        exit(1)
-    with open(out + "/spl.txt", "wb") as f:
-        f.write(base64.b64decode(log[len("base64 ") :]))
+    command_get_file(serv, "get-last-log", out + "/spl.txt")
 
     logging.info("Running runAfter")
     subprocess.run(args.run_after, shell=True, check=True, env=env)
 
 logging.info("Done runs")
 
-log = serv.command("get-log")
-if log is None or not log.startswith("base64 "):
-    exit(1)
-
-with open(args.output + "/spl-full.txt", "wb") as f:
-    f.write(base64.b64decode(log[len("base64 ") :]))
+command_get_file(serv, "get-log", args.output + "/spl-full.txt")
 
 logging.info("Successful exit")

@@ -64,6 +64,7 @@ def run_server(host: str, port: int, handle) -> None:
         allow_reuse_address = True
 
     with Server((host, port), Handler) as server:
+        logging.info(f"Ready to accept connections at {host}:{port}")
         server.serve_forever()
 
 
