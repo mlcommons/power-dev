@@ -34,14 +34,11 @@
 
 #pragma comment (lib, "Ws2_32.lib")
 
-#define START_PTD 100
-#define STOP_PTD 200
-#define GET_DATA 500
-#define SAVE_FILE 501
-#define START_RANGING 300
-#define START_TESTING 301
+#define START 100
+#define START_LOG 200
+#define STOP_LOG 300
+
 #define SLEEP_PTD_AFTER_CHANGING_RANGE 10000
-#define TMP_LOG_DIR "./tmp/"
 
 #define PTD_PORT "8888"
 #define PTD_IP "127.0.0.1"
@@ -50,14 +47,26 @@
 #define DEFAULT_BUFLEN 512
 #define FILE_NAME 128
 
+#define MODE_AMOUNT 2
+#define MODE_RANGING 0
+#define MODE_TESTING 1
+
+#define MAX_AMPS_VOLTS_VALUE_FILE "./maxAmpsVoltsValue.json"
+#define MAX_AMPS_VOLTS_VALUE_SCRIPT "python.exe getMaxValues.py -spl"
+
 struct serverAnswer {
     int code;
     char msg[DEFAULT_BUFLEN];
 };
 
-struct SaveLogMessage {
+struct StartLogMessage {
     int code;
-    char fileName[FILE_NAME];
+    char workloadName[FILE_NAME];
+};
+
+struct StartTestMessage {
+    int code;
+    int workloadAmount;
 };
 
 #endif //POWER_SERVER_H

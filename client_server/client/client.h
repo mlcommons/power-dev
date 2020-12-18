@@ -31,29 +31,35 @@
 #include "maxAmpsVoltsParser.h"
 #include <map>
 
-#define RUN 100
-#define RUN_STR "100"
-#define START_RANGING "300"
-#define START_TESTING "301"
-#define STOP "200"
+#define START 100
+#define START_LOG 200
+#define STOP_LOG "300"
 #define GET_FILE "500"
-#define SAVE_FILE 501
+
+#define MODE_AMOUNT 2
+#define MODE_RANGING 0
+
 #define PYTHON_GET_MAX_VALUE "python getMaxValues.py -spl "
 #define TMP_LOG_DIR "tmp"
 
 #define DEFAULT_BUFFER_CHUNK_SIZE 4096
 #define DEFAULT_FILE_CHUNK_SIZE 65536
 #define DEFAULT_BUFLEN 512
-#define FILE_NAME_SIZE 128
+#define WORKLOAD_NAME_SIZE 128
 
 struct ServerAnswer {
     int code;
     char message[DEFAULT_BUFLEN];
 };
 
-struct SaveLogMessage {
+struct StartLogMessage {
     int code;
-    char fileName[FILE_NAME_SIZE];
+    char workloadName[WORKLOAD_NAME_SIZE];
+};
+
+struct StartTestMessage {
+    int code;
+    int workloadAmount;
 };
 
 #endif //POWER_CLIENT_H

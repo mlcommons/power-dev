@@ -39,15 +39,10 @@ void parseClientCommands(json_object_element_s *element, void *data) {
         copyStringArrayToDataField(elementValue, &(commands->ntp));
     } else if (strcmp(elementNameString, RUN_TEST_COMMAND) == 0) {
         parseTestCommands(elementValue, &commands->testCommands);
-    } else if (strcmp(elementNameString, RUN_PARSER_COMMANDS) == 0) {
-        checkCommandValueExistence(commands->parser);
-        copyStringArrayToDataField(elementValue, &commands->parser);
-    } else if (strcmp(elementNameString, MAX_AMPS_VOLTS_FILE) == 0) {
-        copyStringValueToDataField(elementValue, &commands->maxAmpsVoltsFile);
-    } else if (strcmp(elementNameString, CORRECTION_FACTOR) == 0) {
-        copyFloatValueFromNumber(elementValue, &commands->correctionFactor);
-    } else if (strcmp(elementNameString, LOG_FILE) == 0) {
+    }else if (strcmp(elementNameString, LOG_FILE) == 0) {
         copyStringValueToDataField(elementValue, &commands->logFile);
+    } else if (strcmp(elementNameString, BUILD_FOLDER) == 0) {
+        copyStringValueToDataField(elementValue, &commands->buildFolderPath);
     } else {
         std::cerr << "Wrong JSON key" << std::endl;
         exit(0);

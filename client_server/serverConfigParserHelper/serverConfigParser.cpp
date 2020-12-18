@@ -90,15 +90,15 @@ bool isStringFlag(const char *elementName) {
     return (strcmp(elementName, OPTION_LOGFILE.c_str()) == 0 ||
             strcmp(elementName, DEBUG_OUTPUT_TO_FILE.c_str()) == 0 ||
             strcmp(elementName, VOLTAGE_AUTO_RANGE.c_str()) == 0 ||
-            strcmp(elementName, AMPERE_AUTO_RANGE.c_str()) == 0);
+            strcmp(elementName, AMPERE_AUTO_RANGE.c_str()) == 0 ||
+            strcmp(elementName, USE_YOKOGAWA_USB_OR_ETHERNET_INTERFACE.c_str()) == 0);
 }
 
 bool isNumberFlag(const char *elementName) {
     return (strcmp(elementName, BAUD_RATE.c_str()) == 0 ||
             strcmp(elementName, CHANNEL_NUMBER.c_str()) == 0 ||
             strcmp(elementName, PORT.c_str()) == 0 ||
-            strcmp(elementName, GPIB_BOARD_NUMBER.c_str()) == 0 ||
-            strcmp(elementName, USE_YOKOGAWA_USB_OR_ETHERNET_INTERFACE.c_str()) == 0);
+            strcmp(elementName, GPIB_BOARD_NUMBER.c_str()) == 0);
 }
 
 int addKeyIfElementIsBooleanFlag(json_object_element_s *element, std::string *flagsString) {

@@ -13,7 +13,6 @@
 // limitations under the License.
 // =============================================================================
 
-
 #include "./client.h"
 
 int receiveBuffer(int s, char *buffer, int bufferSize, int chunkSize = DEFAULT_BUFFER_CHUNK_SIZE) {
@@ -83,21 +82,27 @@ void receiveServerAnswer(int sock) {
     }
 }
 
-void sendCommandToServer(int sock, const char *msg) {
+void sendMsgToServer(int sock, const char *msg) {
     char message[DEFAULT_BUFLEN];
     strcpy(message, msg);
     send(sock, message, strlen(message), 0);
     std::cout << "Send command to server: " << message << std::endl;
 }
 
-void sendMsg(int sock, std::string fileName) {
-    SaveLogMessage message;
-    message.code = RUN;
-    sprintf(message.fileName, fileName.c_str());
+void sendRunToServer(int sock, int workloadAmount) {
+    StartTestMessage message;
+    message.code = START;
+    message.workloadAmount = workloadAmount;
+    send(sock, (char *) &message, sizeof(StartTestMessage), 0);
+    std::cout << "Send command to server: " << message.code << std::endl;
+}
 
-    send(sock, (char *) &message, sizeof(SaveLogMessage), 0);
-
-    std::cout << "Send command to server: " << message.fileName << std::endl;
+void sendStartLoggingToServer(int sock, std::string workloadName) {
+    StartLogMessage message;
+    message.code = START_LOG;
+    sprintf(message.workloadName, workloadName.c_str());
+    send(sock, (char *) &message, sizeof(StartLogMessage), 0);
+    std::cout << "Send command to server: " << message.workloadName << std::endl;
 }
 
 void executeCommand(std::string command) {
@@ -108,7 +113,7 @@ void executeCommand(std::string command) {
     }
 }
 
-void executeCommands(std::vector<std::string> commands){
+void executeCommands(std::vector <std::string> commands) {
     for (int i = 0; i < commands.size(); i++) {
         executeCommand(commands[i]);
     }
@@ -118,7 +123,6 @@ int main(int argc, char const *argv[]) {
     std::string serverIpAddress;
     std::string configurationFile;
     int serverPort;
-    bool isRangingMode = false;
 
     cxxopts::Options options("PTD client", "A brief description");
 
@@ -127,7 +131,6 @@ int main(int argc, char const *argv[]) {
             ("i,serverIpAddress", "Server ip address", cxxopts::value<std::string>())
             ("c,configurationFile", "Client configuration file path",
              cxxopts::value<std::string>()->default_value("config.txt"))
-            ("r,ranging", "Ranging mode", cxxopts::value<bool>()->default_value("false"))
             ("h,help", "Print usage");
 
     auto result = options.parse(argc, argv);
@@ -135,10 +138,6 @@ int main(int argc, char const *argv[]) {
     if (result.count("help")) {
         std::cout << options.help() << std::endl;
         exit(0);
-    }
-
-    if (result.count("ranging")) {
-        isRangingMode = true;
     }
 
     if (result.count("serverIpAddress")) {
@@ -150,9 +149,6 @@ int main(int argc, char const *argv[]) {
 
     serverPort = result["serverPort"].as<int>();
     configurationFile = result["configurationFile"].as<std::string>();
-
-    ClientConfig data = getClientConfig(configurationFile);
-    executeCommands(data.ntp);
 
     int sock = 0;
     struct sockaddr_in ServerAddress;
@@ -175,45 +171,35 @@ int main(int argc, char const *argv[]) {
 
     std::map<std::string, std::string>::iterator itr;
 
-    sendCommandToServer(sock, START_RANGING);
+    ClientConfig data = getClientConfig(configurationFile);
+    executeCommands(data.ntp);
 
-    for (itr = data.testCommands.begin(); itr != data.testCommands.end(); ++itr) {
-        sendCommandToServer(sock, RUN_STR);
-        receiveServerAnswer(sock);
-
-        executeCommand(itr->second);
-
-        sendCommandToServer(sock, STOP);
-        receiveServerAnswer(sock);
-
-        sendCommandToServer(sock, itr->first.c_str());
-        receiveServerAnswer(sock);
-
-        sleep(5);
-     }
-
-    sendCommandToServer(sock, START_TESTING);
-
-    sendCommandToServer(sock, START_TESTING);
+    sendRunToServer(sock, data.testCommands.size());
     receiveServerAnswer(sock);
 
-    for (itr = data.testCommands.begin(); itr != data.testCommands.end(); ++itr) {
-        std::cout << sizeof(SaveLogMessage) << std::endl;
-        sendMsg(sock, itr->first.c_str());
-        receiveServerAnswer(sock);
+    for (int i = 0; i < MODE_AMOUNT; i++) {
+        for (itr = data.testCommands.begin(); itr != data.testCommands.end(); ++itr) {
 
-        executeCommand(itr->second);
+            std::cout << "Name " << itr->first << " is using for command \"" << itr->second << "\"" << std::endl;
 
-        sendCommandToServer(sock, STOP);
-        receiveServerAnswer(sock);
+            sendStartLoggingToServer(sock, itr->first);
+            receiveServerAnswer(sock);
 
-        sendCommandToServer(sock, GET_FILE);
-        receiveFile(sock, itr->first.c_str());
+            executeCommand(itr->second);
 
-        sleep(5);
+            sendMsgToServer(sock, STOP_LOG);
+            receiveServerAnswer(sock);
+            std::string buildPath = "";
+            if (data.buildFolderPath.length() != 0) {
+                std::string buildPath = " -b " + data.buildFolderPath;
+            }
+
+            system(("python cpLoadgenFiles.py -wn " + std::string(itr->first) +
+                        ((i == MODE_RANGING) ? "_ranging" : "_testing") + buildPath).c_str());
+        }
     }
 
-    executeCommands(data.parser);
+    receiveFile(sock, data.logFile);
 
     return 0;
 }
