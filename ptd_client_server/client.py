@@ -71,8 +71,8 @@ parser.add_argument(
     "-o", "--output", metavar="DIR", type=str, default="out",
     help="Output directory")
 parser.add_argument(
-    "--ntp-command", metavar="CMD", type=str,
-    help="""A command to run after connecting to the server.""")
+    "--ntp-server", metavar="ADDR", type=str,
+    help="""NTP server address.""")
 parser.add_argument(
     "--run-before", metavar="CMD", type=str,
     help="""
@@ -112,8 +112,8 @@ if args.run_workload is None:
 if args.run_after is None:
     args.run_after = config.get("runAfter", "")
 
-if args.ntp_command is None:
-    args.ntp_command = config.get("ntpCommand", "")
+if args.ntp_server is None:
+    args.ntp_server = config.get("ntpServer")
 
 if os.path.exists(args.output):
     logging.fatal(f"The output directory {args.output!r} already exists.")
@@ -131,8 +131,7 @@ if command(serv, "hello") != "Hello from server!":
 logging.info(f"Creating output directory {args.output!r}")
 os.mkdir(args.output)
 
-logging.info(f"Running {args.ntp_command!r}")
-subprocess.run(args.ntp_command, shell=True, check=True)
+lib.ntp_sync(args.ntp_server)
 
 command(serv, "init", check=True)
 
@@ -153,9 +152,11 @@ for mode in ["ranging", "testing"]:
     env["ranging"] = "1" if mode == "ranging" else "0"
     env["out"] = out
 
-    logging.info("Running runBefore")
-    subprocess.run(args.run_before, shell=True, check=True, env=env)
+    if args.run_before is not None:
+        logging.info("Running runBefore")
+        subprocess.run(args.run_before, shell=True, check=True, env=env)
 
+    lib.ntp_sync(args.ntp_server)
     command(serv, f"start-{mode},workload", check=True)
 
     logging.info("Running runWorkload")
@@ -165,8 +166,9 @@ for mode in ["ranging", "testing"]:
 
     command_get_file(serv, "get-last-log", out + "/spl.txt")
 
-    logging.info("Running runAfter")
-    subprocess.run(args.run_after, shell=True, check=True, env=env)
+    if args.run_after is not None:
+        logging.info("Running runAfter")
+        subprocess.run(args.run_after, shell=True, check=True, env=env)
 
 logging.info("Done runs")
 

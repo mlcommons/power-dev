@@ -29,16 +29,17 @@ The output would be located at `output-directory`.
 
 ## Configuration examples
 
-If you'll use these examples, make sure you'll remove all comments starting with `//`.
-
 Client configuration:
 
 ```javascript
 // Note that the same options could be set using command line.
 // See ./client.py --help for the reference.
+//
+// If you use this example, make sure you remove all comments starting with `//`.
 {
-  // An command to run after connecting to the server.
-  "ntpCommand": "sudo /usr/sbin/ntpdate time.windows.com || true",
+  // (Optional) NTP server to sync with before running the workload.
+  // See "NTP Setup" section in the README.md.
+  "ntpServer": "ntp.example.com"
 
   // The following are three shell commands to be executed.
   // These commands would be executed twice, in the ranging, and in the testing modes.
@@ -66,11 +67,11 @@ Client configuration:
 
 Server configuration:
 
-```
+```ini
 [server]
-# An command to run when a client connects.
-# Here is an example of a command for Windows that enables NTP service and triggers a resync.
-ntpCommand: w32tm /resync || ( net start w32time && w32tm /resync )
+# (Optional) NTP server to sync with before each measurement.
+# See "NTP Setup" section in the README.md.
+ntpServer: ntp.example.com
 
 # A command to run PTDaemon.
 ptdCommand: D:\work\spec_ptd-main\PTD\ptd-windows-x86.exe -p 8888 -l D:\logs_ptdeamon.txt -e -y 49 C2PH13047V
@@ -83,3 +84,24 @@ ptdPort: 8888
 # Should be in sync with "ptdCommand".
 ptdLogfile: D:\logs_ptdeamon.txt
 ```
+
+
+## NTP Setup
+
+To make sure the Loadgen logs and PTDaemon logs match, the system time should be synchronized on the client and the server.
+Both the client and the server have an option to configure the NTP server address to sync with before running a workload.
+
+### Linux
+
+Prerequisites:
+1. Install `ntpdate` binary. Ubuntu package: `ntpdate`.
+2. Disable pre-existing `ntp` daemon if it is running. On Ubuntu: `systemctl disable ntp; systemctl stop ntp`.
+3. Root priveleges are required. Either run the script as root, or set up a passwordless `sudo`.
+
+The script will synchronize time using `ntpdate` binary.
+
+### Windows
+Prerequisites:
+1. Run the script as an administrator.
+
+The script would enable and configure `w32time` service automatically.

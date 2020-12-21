@@ -71,7 +71,7 @@ class ServerConfig:
     def __init__(self, filename: str) -> None:
         c = configparser.ConfigParser()
         c.read_file(open(filename))
-        self.ntp_command = c["server"]["ntpCommand"]
+        self.ntp_server = c["server"].get("ntpServer")
         self.ptd_command = c["server"]["ptdCommand"]
         self.ptd_port = c.getint("server", "ptdPort")
         self.ptd_logfile = c["server"]["ptdLogfile"]
@@ -200,7 +200,7 @@ class Server:
         if cmd[0] == "time":
             return str(time.time())
         if cmd[0] == "init":
-            subprocess.run(self._config.ntp_command, shell=True, check=True)
+            lib.ntp_sync(config.ntp_server)
             if not self._ptd.start():
                 return "Error"
             return "OK"
@@ -259,8 +259,7 @@ args = parser.parse_args()
 
 config = ServerConfig(args.configurationFile)
 
-logging.info("Running ntp once")
-subprocess.run(config.ntp_command, shell=True, check=True)
+lib.ntp_sync(config.ntp_server)
 
 server = Server(config)
 try:
