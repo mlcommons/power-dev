@@ -20,12 +20,14 @@ from decimal import Decimal
 import argparse
 import base64
 import configparser
+import datetime
 import logging
 import os
 import re
 import socket
 import subprocess
 import time
+import zipfile
 
 import lib
 
@@ -75,6 +77,7 @@ class ServerConfig:
         self.ptd_command = c["server"]["ptdCommand"]
         self.ptd_port = c.getint("server", "ptdPort")
         self.ptd_logfile = c["server"]["ptdLogfile"]
+        self.out_dir = c["server"]["outDir"]
 
 
 class Ptd:
@@ -176,7 +179,7 @@ class Server:
                 logging.info(f"Got command from the client {cmd!r}")
 
                 try:
-                    reply = self._handle_cmd(cmd)
+                    reply = self._handle_cmd(cmd, p)
                 except:
                     logging.exception("Got an exception")
                     reply = "Error: exception"
@@ -191,7 +194,7 @@ class Server:
         finally:
             self._ptd.stop()
 
-    def _handle_cmd(self, cmd: str) -> str:
+    def _handle_cmd(self, cmd: str, p: lib.Proto) -> str:
         cmd = cmd.split(",")
         if len(cmd) == 0:
             return "..."
@@ -243,6 +246,23 @@ class Server:
             with open(self._config.ptd_logfile, "rb") as f:
                 data = f.read()
             return "base64 " + base64.b64encode(data).decode()
+        if cmd[0] == "push-log" and len(cmd) == 2:
+            label = cmd[1]
+            if not lib.check_label(label):
+                return "Error: invalid label"
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            dirname = os.path.join(self._config.out_dir, timestamp + "_" + label)
+            try:
+                p.recv_file(dirname + ".zip")
+                with zipfile.ZipFile(dirname + ".zip", "r") as zf:
+                    zf.extractall(dirname)
+            finally:
+                try:
+                    os.remove(dirname + ".zip")
+                except OSError:
+                    pass
+            return "OK"
+
         return "Error: unknown command"
 
 
@@ -258,6 +278,16 @@ parser.add_argument("-c", "--configurationFile", metavar="FILE", type=str, help=
 args = parser.parse_args()
 
 config = ServerConfig(args.configurationFile)
+
+if not os.path.exists(config.out_dir):
+    try:
+        os.mkdir(config.out_dir)
+    except FileNotFoundError:
+        logging.fatal(
+            f"Could not create directory {config.out_dir!r}. "
+            "Make sure all intermediate directories exit."
+        )
+        exit(1)
 
 lib.ntp_sync(config.ntp_server)
 

@@ -83,6 +83,10 @@ ptdPort: 8888
 # A path to a logfile that PTDaemon produces.
 # Should be in sync with "ptdCommand".
 ptdLogfile: D:\logs_ptdeamon.txt
+
+# A directory to store output data.
+# A new subdirectory will be created per each run.
+outDir: D:\ptd-logs\
 ```
 
 
