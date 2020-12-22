@@ -26,6 +26,7 @@ import os
 import re
 import socket
 import subprocess
+import sys
 import time
 import zipfile
 
@@ -132,7 +133,22 @@ class Ptd:
     def start(self) -> bool:
         if self._process is not None:
             return False
-        self._process = subprocess.Popen(self._command, shell=(os.name == "posix"))
+        if sys.platform == "win32":
+            # shell=False:
+            #   On Windows, we don't need a shell to run a command from a single
+            #   string.  On the other hand, calling self._process.terminate()
+            #   will terminate the shell (cmd.exe), but not the an actual
+            #   command.  Thus, shell=False.
+            #
+            # creationflags=subprocess.CREATE_NEW_PROCESS_GROUP:
+            #   We do not want to pass ^C from the current console to the
+            #   PTDaemon.  Instead, we terminate it explicitly in self.stop().
+            self._process = subprocess.Popen(
+                self._command,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            )
+        else:
+            self._process = subprocess.Popen(self._command, shell=True)
 
         retries = 100
         s = None
@@ -141,6 +157,8 @@ class Ptd:
             try:
                 s.connect(("127.0.0.1", self._port))
             except ConnectionRefusedError:
+                if lib.sig.stopped:
+                    exit()
                 time.sleep(0.1)
                 s = None
                 retries -= 1
@@ -213,7 +231,12 @@ class Server:
 
         try:
             while True:
-                cmd = p.recv()
+                try:
+                    with lib.sig:
+                        cmd = p.recv()
+                except KeyboardInterrupt:
+                    break
+
                 if cmd is None:
                     logging.info("Connection closed")
                     break
@@ -221,7 +244,9 @@ class Server:
 
                 try:
                     reply = self._handle_cmd(cmd, p)
-                except:
+                except KeyboardInterrupt:
+                    break
+                except Exception:
                     logging.exception("Got an exception")
                     reply = "Error: exception"
 
@@ -251,7 +276,8 @@ class Server:
         if cmd[0] == "start-ranging" and len(cmd) == 2:
             self._ptd.cmd("SR,V,300")
             self._ptd.cmd("SR,A,Auto")
-            time.sleep(10)
+            with lib.sig:
+                time.sleep(10)
             logging.info("Starting ranging mode")
             self._ptd.cmd(f"Go,1000,0,ranging-{cmd[1]}")
             self._mode = "ranging"
@@ -261,7 +287,8 @@ class Server:
             maxVolts, maxAmps = self._ranging_table[cmd[1]]
             self._ptd.cmd(f"SR,V,{maxVolts}")
             self._ptd.cmd(f"SR,A,{maxAmps}")
-            time.sleep(10)  # TODO: sleep only if maxAmps changes
+            with lib.sig:
+                time.sleep(10)
             logging.info("Starting testing mode")
             self._ptd.cmd(f"Go,1000,0,testing-{cmd[1]}")
             self._mode = "testing"
