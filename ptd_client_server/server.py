@@ -350,7 +350,7 @@ if not os.path.exists(config.out_dir):
     except FileNotFoundError:
         logging.fatal(
             f"Could not create directory {config.out_dir!r}. "
-            "Make sure all intermediate directories exit."
+            "Make sure all intermediate directories exist."
         )
         exit(1)
 

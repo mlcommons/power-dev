@@ -18,52 +18,34 @@ The command is run twice for each setting: the first time in ranging mode, and t
 
 Start a server (on a director):
 ```
-./server.py -c server-config.json
+./server.py -c server-config.conf
 ```
 
-Start a client (on a SUT), assuming the director is located at `192.168.100.200`.
+Then start a client (on a SUT), assuming the director is located at `192.168.100.200`.
 The output would be located at `output-directory`.
+The script `./run.sh` will be used as a workload being measured.
 ```
-./client.py -c client-config.json -i 192.168.100.200 -o output-directory
+./client.py -a 192.168.100.200 -o output-directory --run-workload "./run.sh"
 ```
+
+See `./client.py --help` for option description.
 
 ## Configuration examples
 
-Client configuration:
+```sh
+export MODEL_DIR=...
+export DATA_DIR=...
 
-```javascript
-// Note that the same options could be set using command line.
-// See ./client.py --help for the reference.
-//
-// If you use this example, make sure you remove all comments starting with `//`.
-{
-  // (Optional) NTP server to sync with before running the workload.
-  // See "NTP Setup" section in the README.md.
-  "ntpServer": "ntp.example.com"
-
-  // The following are three shell commands to be executed.
-  // These commands would be executed twice, in the ranging, and in the testing modes.
-  // Each command have the following environment variables:
-  //   "$ranging"  - "1" in the ranging mode, or "0" in the testing mode
-  //   "$out"      - path to the output directory for this run
-
-  // A command to run before power measurement.
-  // Some preparation could be done here, if necessary.
-  "runBefore": "",
-
-  // A command to run under power measurement.
-  // An actual workload should be done here.
-  "runWorkload":
-    "cd ~/loadgen/benchmark; build/repro.exe 800000 0 4 2048",
-
-  // A command to run after power measurement is done.
-  // A cleanup or some log processing could be done here, if necessary.
-  // Here is an example of a command that copies loadgen logs to the output directory.
-  "runAfter":
-    "mkdir -p -- \"$out\"/loadgen/gnmt; cp -a -- ~/loadgen/benchmark/build/mlperf* \"$out\"/loadgen/gnmt"
-}
+./client.py \
+	--ntp ntp.example.com \
+	--label 'ssd-mobilenet-tf-offline' \
+	--run-workload '
+		cd /path/to/mlcommons/inference/vision/classification_and_detection &&
+		./run_local.sh tf ssd-mobilenet cpu --scenario Offline --output "$out"/ssdmobilenet
+	' \
+	--output "$PWD/out" \
+	-a 192.168.104.169
 ```
-
 
 Server configuration:
 
@@ -74,7 +56,7 @@ Server configuration:
 ntpServer: ntp.example.com
 
 # A command to run PTDaemon.
-ptdCommand: D:\work\spec_ptd-main\PTD\ptd-windows-x86.exe -p 8888 -l D:\logs_ptdeamon.txt -e -y 49 C2PH13047V
+ptdCommand: D:\PTD\ptd-windows-x86.exe -p 8888 -l D:\logs_ptdeamon.txt -e -y 49 C2PH13047V
 
 # A port on that PTDaemon listens.
 # Should be in sync with "ptdCommand".

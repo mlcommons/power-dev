@@ -16,7 +16,6 @@
 
 import argparse
 import base64
-import json
 import logging
 import os
 import socket
@@ -62,82 +61,71 @@ def create_zip(zip_filename: str, dirname: str) -> None:
 
 lib.init("client")
 
-parser = argparse.ArgumentParser(description="PTD client")
+parser = argparse.ArgumentParser(
+    description="PTD client",
+    formatter_class=lambda prog: argparse.RawDescriptionHelpFormatter(
+        prog, max_help_position=30
+    ),
+)
 
 # fmt: off
 parser.add_argument(
-    "-c", "--config", metavar="FILE", type=str,
-    help="""
-        Client configuration file path.
-        Note that the same options could be configured through the command line.
-    """)
+    "-a", "--addr", metavar="ADDR", type=str, required=True,
+    help="server address")
 parser.add_argument(
-    "-p", "--serverPort", metavar="PORT", type=int, default=4950,
-    help="Server port")
+    "-p", "--port", metavar="PORT", type=int, default=4950,
+    help="server port, defaults to 4950")
 parser.add_argument(
-    "-i", "--serverIpAddress", metavar="ADDR", type=str, required=True,
-    help="Server IP address")
+    "-o", "--output", metavar="DIR", type=str, required=True,
+    help="output directory")
 parser.add_argument(
-    "-o", "--output", metavar="DIR", type=str, default="out",
-    help="Output directory")
+    "-n", "--ntp", metavar="ADDR", type=str,
+    help="""NTP server address, optional""")
 parser.add_argument(
-    "--ntp-server", metavar="ADDR", type=str,
-    help="""NTP server address.""")
-parser.add_argument(
+    "-l", "--label", metavar="LABEL", type=str,
+    help="""a label to inclide into the directory name at the server""")
+parser_cmds = parser.add_argument_group(
+    "Commands",
+    """The following are three shell commands to be executed.
+Each of these would be executed twice: in the ranging, and in the testing modes.
+Each command have the following environment variables:
+"$ranging"  - "1" in the ranging mode, or "0" in the testing mode
+"$out"      - path to the output directory for this run""")
+parser_cmds.add_argument(
     "--run-before", metavar="CMD", type=str,
     help="""
         A command to run before power measurement.
         Some preparation could be done here, if necessary.
     """)
-parser.add_argument(
-    "--run-workload", metavar="CMD", type=str,
+parser_cmds.add_argument(
+    "--run-workload", metavar="CMD", type=str, required=True,
     help="""
         A command to run under power measurement.
         An actual workload should be done here.
     """)
-parser.add_argument(
+parser_cmds.add_argument(
     "--run-after", metavar="CMD", type=str,
     help="""
         A command to run after power measurement is done.
         A cleanup or some log processing could be done here, if necessary.
     """)
-parser.add_argument(
-    "--label", metavar="LABEL", type=str,
-    help="""
-        Optional label to include to the output sent to the server.
-        If set, this label would be included in the directory name.
-    """)
 # fmt: on
 
 args = parser.parse_args()
-if args.config is not None:
-    with open(args.config, "r") as f:
-        config = json.load(f)
-else:
-    config = {}
-
-if args.run_before is None:
-    args.run_before = config.get("runBefore", "")
-
-if args.run_workload is None:
-    args.run_workload = config.get("runWorkload", None)
-if args.run_workload is None:
-    logging.fatal("--run-workload option is mandatory")
-    exit(1)
-
-if args.run_after is None:
-    args.run_after = config.get("runAfter", "")
-
-if args.ntp_server is None:
-    args.ntp_server = config.get("ntpServer")
 
 if args.label is not None:
     if not lib.check_label(args.label):
-        logging.fatal("Error: invalid label {args.label!r}")
-        exit(1)
+        parser.error(
+            "invalid --label value: {args.label!r}. Should be alphanumeric or -_."
+        )
     log_name_prefix = args.label + "-"
 else:
     log_name_prefix = ""
+    logging.warning("Assuming empty label (--label '')")
+
+if args.port is None:
+    args.port = lib.DEFAULT_PORT
+    logging.warning(f"Assuming default port (--port {lib.DEFAULT_PORT}")
 
 if os.path.exists(args.output):
     logging.fatal(f"The output directory {args.output!r} already exists.")
@@ -145,7 +133,7 @@ if os.path.exists(args.output):
     exit(1)
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect((args.serverIpAddress, args.serverPort))
+s.connect((args.addr, args.port))
 serv = lib.Proto(s)
 
 if command(serv, "hello") != "Hello from server!":

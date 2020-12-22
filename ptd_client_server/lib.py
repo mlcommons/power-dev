@@ -26,6 +26,9 @@ import sys
 import threading
 
 
+DEFAULT_PORT = 4590
+
+
 class Proto:
     _EOL = b"\r\n"
     # TODO: escape/unescape binary data?
@@ -205,7 +208,7 @@ def run_server(host: str, port: int, handle: Callable[[Proto], None]) -> None:
 
 def check_label(label: str) -> bool:
     valid_chars = "-_" + string.ascii_letters + string.digits
-    return label != "" and all((c in valid_chars for c in label))
+    return all((c in valid_chars for c in label))
 
 
 def init(name: str) -> None:
