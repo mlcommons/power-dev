@@ -13,14 +13,17 @@
 # limitations under the License.
 # =============================================================================
 
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 import logging
 import os
+import select
+import signal
 import socket
 import socketserver
 import string
 import subprocess
 import sys
+import threading
 
 
 class Proto:
@@ -32,11 +35,22 @@ class Proto:
         self._buf = b""
         self._x: Optional[socket.socket] = conn
 
+    def _recv_buf(self, buflen: int) -> bytes:
+        assert self._x is not None
+        # Issue: https://bugs.python.org/issue41437
+        #        SIGINT blocked by socket operations like recv on Windows
+        # Workaround: Instead of blocking on socket.recv(), we run select() with
+        #             an one second timeout in a loop.
+        while True:
+            ready = select.select([self._x], [], [], 1)
+            if ready[0]:
+                return self._x.recv(buflen)
+
     def recv(self) -> Optional[str]:
         if self._x is None:
             return None
         while self._EOL not in self._buf:
-            recvd = self._x.recv(1024 * 16)
+            recvd = self._recv_buf(1024 * 16)
             if len(recvd) == 0:
                 self._close()
                 return None
@@ -82,7 +96,7 @@ class Proto:
                         )
 
                     f.write(data)
-            except:
+            except Exception:
                 self._close()
                 raise
         os.rename(filename + ".tmp", filename)
@@ -110,7 +124,7 @@ class Proto:
                 self._buf = self._buf[len2:]
                 length -= len2
             else:
-                recvd = self._x.recv(min(1024 * 16, length))
+                recvd = self._recv_buf(min(1024 * 16, length))
                 if len(recvd) == 0:
                     self._close()
                     return None
@@ -124,6 +138,45 @@ class Proto:
             self._x = None
 
 
+class SignalHandler:
+    # See also:
+    #   https://vorpus.org/blog/control-c-handling-in-python-and-trio/
+    #   https://bugs.python.org/issue42340
+
+    def __init__(self) -> None:
+        self.stopped = False
+        self.force_stopped = False
+        self.on_stop: Callable[[], None] = lambda: sys.exit()
+        self._enable_exception = False
+
+    def init(self) -> None:
+        signal.signal(signal.SIGINT, self._handle)
+
+    def _handle(self, signum: int, frame: Any) -> None:
+        if not self.stopped:
+            logging.info("Stopping...")
+            self.stopped = True
+            self.on_stop()
+            if self._enable_exception:
+                raise KeyboardInterrupt
+        else:
+            logging.info("Force stopping...")
+            self.force_stopped = True
+            exit(1)
+
+    def __enter__(self) -> "SignalHandler":
+        """Enable KeyboardInterrupt temporarely."""
+        self._enable_exception = True
+        return self
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        self._enable_exception = False
+        pass
+
+
+sig = SignalHandler()
+
+
 def run_server(host: str, port: int, handle: Callable[[Proto], None]) -> None:
     class Handler(socketserver.BaseRequestHandler):
         def handle(self) -> None:
@@ -131,9 +184,7 @@ def run_server(host: str, port: int, handle: Callable[[Proto], None]) -> None:
             p = Proto(self.request)
             try:
                 handle(p)
-            except KeyboardInterrupt as e:
-                raise e
-            except:
+            except Exception:
                 logging.exception("Got an exception")
             logging.info("Done processing")
 
@@ -142,6 +193,7 @@ def run_server(host: str, port: int, handle: Callable[[Proto], None]) -> None:
 
     with Server((host, port), Handler) as server:
         logging.info(f"Ready to accept connections at {host}:{port}")
+        sig.on_stop = threading.Thread(target=server.shutdown).start
         server.serve_forever()
 
 
@@ -154,6 +206,7 @@ def init(name: str) -> None:
     logging.basicConfig(
         level=logging.INFO, format=f"{name} %(asctime)s [%(levelname)s] %(message)s"
     )
+    sig.init()
 
 
 def ntp_sync(server: Optional[str]) -> None:
