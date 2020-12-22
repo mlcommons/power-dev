@@ -71,13 +71,54 @@ def read_log(log_fname: str, mark: str) -> str:
 
 class ServerConfig:
     def __init__(self, filename: str) -> None:
-        c = configparser.ConfigParser()
-        c.read_file(open(filename))
-        self.ntp_server = c["server"].get("ntpServer")
-        self.ptd_command = c["server"]["ptdCommand"]
-        self.ptd_port = c.getint("server", "ptdPort")
-        self.ptd_logfile = c["server"]["ptdLogfile"]
-        self.out_dir = c["server"]["outDir"]
+        conf = configparser.ConfigParser()
+        conf.read_file(open(filename))
+
+        try:
+            serv_conf = conf["server"]
+        except KeyError:
+            logging.fatal(
+                "Server section is empty in the configuration file. "
+                "Please add server section."
+            )
+            exit(1)
+
+        all_options = {
+            "ntpServer",
+            "outDir",
+            "ptdCommand",
+            "ptdLogfile",
+            "ptdPort",
+        }
+
+        self.ntp_server = serv_conf.get("ntpServer")
+
+        try:
+            ptd_port = serv_conf["ptdPort"]
+            self.ptd_logfile = serv_conf["ptdLogfile"]
+            self.out_dir = serv_conf["outDir"]
+            self.ptd_command = serv_conf["ptdCommand"]
+        except KeyError as e:
+            logging.fatal(f"{filename}: missing option: {e.args[0]!r}")
+            exit(1)
+
+        try:
+            self.ptd_port = int(ptd_port)
+        except ValueError:
+            logging.fatal(f"{filename}: could not parse {ptd_port!r} as int")
+            exit(1)
+
+        unused_options = set(serv_conf.keys()) - set((i.lower() for i in all_options))
+        if len(unused_options) != 0:
+            logging.warning(
+                f"{filename}: ignoring unknown options: {', '.join(unused_options)}"
+            )
+
+        unused_sections = set(conf.sections()) - {"server"}
+        if len(unused_sections) != 0:
+            logging.warning(
+                f"{filename}: ignoring unknown sections: {', '.join(unused_sections)}"
+            )
 
 
 class Ptd:
