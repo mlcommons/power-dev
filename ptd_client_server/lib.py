@@ -164,9 +164,15 @@ class SignalHandler:
             self.force_stopped = True
             exit(1)
 
+    def check(self) -> None:
+        if self.stopped:
+            raise KeyboardInterrupt
+
     def __enter__(self) -> "SignalHandler":
         """Enable KeyboardInterrupt temporarely."""
         self._enable_exception = True
+        if self.stopped:
+            raise KeyboardInterrupt
         return self
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:

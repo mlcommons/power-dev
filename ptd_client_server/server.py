@@ -231,11 +231,8 @@ class Server:
 
         try:
             while True:
-                try:
-                    with lib.sig:
-                        cmd = p.recv()
-                except KeyboardInterrupt:
-                    break
+                with lib.sig:
+                    cmd = p.recv()
 
                 if cmd is None:
                     logging.info("Connection closed")
@@ -362,5 +359,7 @@ lib.ntp_sync(config.ntp_server)
 server = Server(config)
 try:
     lib.run_server(args.ipAddress, args.serverPort, server.handle_connection)
+except KeyboardInterrupt:
+    pass
 finally:
     server.close()
