@@ -143,7 +143,7 @@ if command(serv, "hello") != "Hello from server!":
 logging.info(f"Creating output directory {args.output!r}")
 os.mkdir(args.output)
 
-lib.ntp_sync(args.ntp_server)
+lib.ntp_sync(args.ntp)
 
 command(serv, "init", check=True)
 
@@ -168,7 +168,7 @@ for mode in ["ranging", "testing"]:
         logging.info("Running runBefore")
         subprocess.run(args.run_before, shell=True, check=True, env=env)
 
-    lib.ntp_sync(args.ntp_server)
+    lib.ntp_sync(args.ntp)
     command(serv, f"start-{mode},workload", check=True)
 
     logging.info("Running runWorkload")
