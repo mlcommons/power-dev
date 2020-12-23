@@ -69,6 +69,10 @@ ptdLogfile: D:\logs_ptdeamon.txt
 # A directory to store output data.
 # A new subdirectory will be created per each run.
 outDir: D:\ptd-logs\
+
+# (Optional) IP address and port to listen on
+# Defaults to "0.0.0.0 4950" if not set
+listen: 192.168.1.2 4950
 ```
 
 

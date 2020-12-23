@@ -46,9 +46,6 @@ RE_PTD_LOG = re.compile(
     re.X,
 )
 
-DEFAULT_PORT = 4950
-DEFAULT_IP_ADDR = "0.0.0.0"
-
 
 def max_volts_amps(log_fname: str, mark: str) -> Tuple[str, str]:
     maxVolts = Decimal("-1")
@@ -77,6 +74,22 @@ def read_log(log_fname: str, mark: str) -> str:
 def exit_with_error_msg(error_msg: str) -> None:
     logging.fatal(error_msg)
     exit(1)
+
+
+def get_host_port_from_listen_string(listen_str: str) -> Tuple[str, int]:
+    try:
+        host, port = listen_str.split(" ")
+    except ValueError:
+        raise ValueError(f"could not parse listen option {listen_str}")
+    try:
+        ip_address(host)
+    except ValueError:
+        raise ValueError(f"wrong listen option ip address {ip_address}")
+    try:
+        int_port = int(port)
+    except ValueError:
+        raise ValueError(f"could not parse listen option port {port} as integer")
+    return (host, int_port)
 
 
 class ServerConfig:
@@ -112,28 +125,13 @@ class ServerConfig:
             exit_with_error_msg(f"{filename}: missing option: {e.args[0]!r}")
 
         try:
-            listen = serv_conf["listen"]
+            listen_str = serv_conf["listen"]
             try:
-                host, port = listen.split(":")
-            except ValueError:
-                exit_with_error_msg(
-                    f"{filename}: could not parse listen option {listen}"
-                )
-            try:
-                ip_address(host)
-                self.host = host
-            except ValueError:
-                exit_with_error_msg(
-                    f"{filename}: wrong listen option ip address {ip_address}"
-                )
-            try:
-                self.port = int(port)
-            except ValueError:
-                exit_with_error_msg(
-                    f"{filename}: could not parse listen option port {port} as integer"
-                )
-        except KeyError as e:
-            self.host, self.port = (DEFAULT_IP_ADDR, DEFAULT_PORT)
+                self.host, self.port = get_host_port_from_listen_string(listen_str)
+            except ValueError as e:
+                exit_with_error_msg(f"{filename}: {e.args[0]}")
+        except KeyError:
+            self.host, self.port = (lib.DEFAULT_IP_ADDR, lib.DEFAULT_PORT)
             logging.warning(
                 f"{filename}: There is no listen option. Server use {self.host}:{self.port}"
             )
@@ -305,7 +303,7 @@ class Server:
                 return "Error"
             return "OK"
         if cmd[0] == "start-ranging" and len(cmd) == 2:
-            self._ptd.cmd("SR,V,300")
+            self._ptd.cmd("SR,V,Auto")
             self._ptd.cmd("SR,A,Auto")
             with lib.sig:
                 time.sleep(10)
