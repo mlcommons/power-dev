@@ -26,7 +26,8 @@ import sys
 import threading
 
 
-DEFAULT_PORT = 4590
+DEFAULT_PORT = 4950
+DEFAULT_IP_ADDR = "0.0.0.0"
 
 
 class Proto:
