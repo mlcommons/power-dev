@@ -17,6 +17,7 @@
 from __future__ import annotations
 from typing import Optional, Dict, Tuple
 from decimal import Decimal
+from ipaddress import ip_address
 import argparse
 import base64
 import configparser
@@ -45,6 +46,9 @@ RE_PTD_LOG = re.compile(
     re.X,
 )
 
+DEFAULT_PORT = 4950
+DEFAULT_IP_ADDR = "0.0.0.0"
+
 
 def max_volts_amps(log_fname: str, mark: str) -> Tuple[str, str]:
     maxVolts = Decimal("-1")
@@ -70,6 +74,11 @@ def read_log(log_fname: str, mark: str) -> str:
     return "".join(result)
 
 
+def exit_with_error_msg(error_msg: str) -> None:
+    logging.fatal(error_msg)
+    exit(1)
+
+
 class ServerConfig:
     def __init__(self, filename: str) -> None:
         conf = configparser.ConfigParser()
@@ -78,11 +87,10 @@ class ServerConfig:
         try:
             serv_conf = conf["server"]
         except KeyError:
-            logging.fatal(
+            exit_with_error_msg(
                 "Server section is empty in the configuration file. "
                 "Please add server section."
             )
-            exit(1)
 
         all_options = {
             "ntpServer",
@@ -90,6 +98,7 @@ class ServerConfig:
             "ptdCommand",
             "ptdLogfile",
             "ptdPort",
+            "listen",
         }
 
         self.ntp_server = serv_conf.get("ntpServer")
@@ -100,14 +109,39 @@ class ServerConfig:
             self.out_dir = serv_conf["outDir"]
             self.ptd_command = serv_conf["ptdCommand"]
         except KeyError as e:
-            logging.fatal(f"{filename}: missing option: {e.args[0]!r}")
-            exit(1)
+            exit_with_error_msg(f"{filename}: missing option: {e.args[0]!r}")
+
+        try:
+            listen = serv_conf["listen"]
+            try:
+                host, port = listen.split(":")
+            except ValueError:
+                exit_with_error_msg(
+                    f"{filename}: could not parse listen option {listen}"
+                )
+            try:
+                ip_address(host)
+                self.host = host
+            except ValueError:
+                exit_with_error_msg(
+                    f"{filename}: wrong listen option ip address {ip_address}"
+                )
+            try:
+                self.port = int(port)
+            except ValueError:
+                exit_with_error_msg(
+                    f"{filename}: could not parse listen option port {port} as integer"
+                )
+        except KeyError as e:
+            self.host, self.port = (DEFAULT_IP_ADDR, DEFAULT_PORT)
+            logging.warning(
+                f"{filename}: There is no listen option. Server use {self.host}:{self.port}"
+            )
 
         try:
             self.ptd_port = int(ptd_port)
         except ValueError:
-            logging.fatal(f"{filename}: could not parse {ptd_port!r} as int")
-            exit(1)
+            exit_with_error_msg(f"{filename}: could not parse {ptd_port!r} as int")
 
         unused_options = set(serv_conf.keys()) - set((i.lower() for i in all_options))
         if len(unused_options) != 0:
@@ -336,8 +370,6 @@ lib.init("ptd-server")
 parser = argparse.ArgumentParser(description="Server for communication with PTD")
 
 # fmt: off
-parser.add_argument("-p", "--serverPort", metavar="PORT", type=int, help="Server port", default=4950)
-parser.add_argument("-i", "--ipAddress", metavar="IP", type=str, default="0.0.0.0")
 parser.add_argument("-c", "--configurationFile", metavar="FILE", type=str, help="", default="server.conf")
 # fmt: on
 args = parser.parse_args()
@@ -348,17 +380,16 @@ if not os.path.exists(config.out_dir):
     try:
         os.mkdir(config.out_dir)
     except FileNotFoundError:
-        logging.fatal(
+        exit_with_error_msg(
             f"Could not create directory {config.out_dir!r}. "
             "Make sure all intermediate directories exist."
         )
-        exit(1)
 
 lib.ntp_sync(config.ntp_server)
 
 server = Server(config)
 try:
-    lib.run_server(args.ipAddress, args.serverPort, server.handle_connection)
+    lib.run_server(config.host, config.port, server.handle_connection)
 except KeyboardInterrupt:
     pass
 finally:
