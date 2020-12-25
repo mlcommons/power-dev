@@ -68,7 +68,11 @@ class Proto:
     def send(self, data: str) -> None:
         if self._x is None:
             return
-        self._x.sendall(data.encode() + self._EOL)
+        try:
+            self._x.sendall(data.encode() + self._EOL)
+        except OSError:
+            logging.exception("Got an exception while sending a message to socket")
+            self._close()
 
     def command(self, data: str) -> Optional[str]:
         if self._x is None:
@@ -138,8 +142,12 @@ class Proto:
 
     def _close(self) -> None:
         if self._x is not None:
-            self._x.close()
-            self._x = None
+            try:
+                self._x.close()
+            except OSError:
+                logging.exception("Got an exception while closing a socket")
+            finally:
+                self._x = None
 
 
 class SignalHandler:
@@ -187,7 +195,13 @@ class SignalHandler:
 sig = SignalHandler()
 
 
-def run_server(host: str, port: int, handle: Callable[[Proto], None]) -> None:
+def run_server(
+    host: str,
+    port: int,
+    handle: Callable[[Proto], None],
+    timeout: Optional[float] = None,
+    handle_timeout: Optional[Callable[[], None]] = None,
+) -> None:
     class Handler(socketserver.BaseRequestHandler):
         def handle(self) -> None:
             logging.info(f"Connected {self.client_address}")
@@ -198,13 +212,31 @@ def run_server(host: str, port: int, handle: Callable[[Proto], None]) -> None:
                 logging.exception("Got an exception")
             logging.info("Done processing")
 
+    timeout_ = timeout
+
     class Server(socketserver.TCPServer):
         allow_reuse_address = True
+        timeout = timeout_
+
+        def handle_timeout(self) -> None:
+            if handle_timeout is None:
+                return
+            try:
+                handle_timeout()
+            except Exception:
+                logging.exception("Got an exception")
+
+    done = False
+
+    def stop() -> None:
+        nonlocal done
+        done = True
 
     with Server((host, port), Handler) as server:
         logging.info(f"Ready to accept connections at {host}:{port}")
-        sig.on_stop = threading.Thread(target=server.shutdown).start
-        server.serve_forever()
+        sig.on_stop = stop
+        while not done:
+            server.handle_request()
 
 
 def check_label(label: str) -> bool:
