@@ -161,6 +161,8 @@ class Ptd:
         self._proto: Optional[lib.Proto] = None
         self._command = command
         self._port = port
+        self._init_Amps: Optional[str] = None
+        self._init_Volts: Optional[str] = None
 
     def start(self) -> bool:
         if self._process is not None:
@@ -208,11 +210,18 @@ class Ptd:
         self.cmd("Identify")  # reply traced in logs
 
         logging.info("Connected to PTDaemon")
+
+        self._get_initial_range()
         return True
 
     def stop(self) -> None:
         if self._proto is not None:
             self.cmd("Stop")
+            self.cmd(f"SR,V,{self._init_Volts}")
+            self.cmd(f"SR,A,{self._init_Amps}")
+            logging.info(
+                f"Set initial values for Amps {self._init_Amps} and Volts {self._init_Volts}"
+            )
             self._proto = None
 
         if self._socket is not None:
@@ -240,6 +249,35 @@ class Ptd:
         reply = self._proto.recv()
         logging.info(f"Reply from ptd: {reply!r}")
         return reply
+
+    def _get_initial_range(self) -> None:
+        # Normal Response: ?Ranges,{Amp Autorange},{Amp Range},{Volt Autorange},{Volt Range}\r\n?
+        # Values: for autorange settings, -1 indicates ?unknown?, 0 = disabled, 1 = enabled
+        # For range values, -1.0 indicates ?unknown?, >0 indicates actual value
+        response = self.cmd("RR")
+        if response is None or response == "":
+            logging.error("Can not get initial range")
+            exit(1)
+
+        response_list = response.split(",")
+
+        def get_range_from_ranges_list(param_num: int, setting_name: str) -> str:
+            try:
+                if (
+                    response_list[param_num] == "0"
+                    and float(response_list[param_num + 1]) > 0
+                ):
+                    return response_list[param_num + 1]
+            except ValueError:
+                logging.warning(f"Can not get ptd range value for {setting_name}")
+                return "Auto"
+            return "Auto"
+
+        self._init_Amps = get_range_from_ranges_list(1, "Amps")
+        self._init_Volts = get_range_from_ranges_list(3, "Volts")
+        logging.info(
+            f"Initial range for Amps is {self._init_Amps} for Volts is {self._init_Volts}"
+        )
 
 
 class Server:
@@ -289,6 +327,13 @@ class Server:
         finally:
             self._ptd.stop()
 
+    def _set_range(self, volts_value: str, amps_value: str) -> None:
+        self._ptd.cmd(f"SR,V,{volts_value}")
+        self._ptd.cmd(f"SR,A,{amps_value}")
+        logging.info("Wait 10 seconds to apply setting for ampere and voltage")
+        with lib.sig:
+            time.sleep(10)
+
     def _handle_cmd(self, cmd: str, p: lib.Proto) -> str:
         cmd = cmd.split(",")
         if len(cmd) == 0:
@@ -303,10 +348,7 @@ class Server:
                 return "Error"
             return "OK"
         if cmd[0] == "start-ranging" and len(cmd) == 2:
-            self._ptd.cmd("SR,V,Auto")
-            self._ptd.cmd("SR,A,Auto")
-            with lib.sig:
-                time.sleep(10)
+            self._set_range("Auto", "Auto")
             logging.info("Starting ranging mode")
             self._ptd.cmd(f"Go,1000,0,ranging-{cmd[1]}")
             self._mode = "ranging"
@@ -314,10 +356,7 @@ class Server:
             return "OK"
         if cmd[0] == "start-testing" and len(cmd) == 2:
             maxVolts, maxAmps = self._ranging_table[cmd[1]]
-            self._ptd.cmd(f"SR,V,{maxVolts}")
-            self._ptd.cmd(f"SR,A,{maxAmps}")
-            with lib.sig:
-                time.sleep(10)
+            self._set_range(maxVolts, maxAmps)
             logging.info("Starting testing mode")
             self._ptd.cmd(f"Go,1000,0,testing-{cmd[1]}")
             self._mode = "testing"
