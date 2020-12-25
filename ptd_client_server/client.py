@@ -152,7 +152,11 @@ serv_time = float(command(serv, "time"))
 client_time2 = time.time()
 dt1 = 1000 * (client_time1 - serv_time)
 dt2 = 1000 * (client_time2 - serv_time)
-logging.info(f"The time difference is in {dt1:.3}ms..{dt2:.3}ms")
+logging.info(f"The time difference is within range {dt1:.3}ms..{dt2:.3}ms")
+
+if max(abs(dt1), abs(dt2)) > 1000:
+    logging.fatal("The time difference between client and server is more than 1 second")
+    exit(1)
 
 for mode in ["ranging", "testing"]:
     logging.info(f"Running workload in {mode} mode")
