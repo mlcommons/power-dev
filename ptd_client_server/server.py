@@ -268,7 +268,7 @@ class Ptd:
                     and float(response_list[param_num + 1]) > 0
                 ):
                     return response_list[param_num + 1]
-            except ValueError:
+            except (ValueError, IndexError):
                 logging.warning(f"Can not get ptd range value for {setting_name}")
                 return "Auto"
             return "Auto"
