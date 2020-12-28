@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2018 The MLPerf Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +13,24 @@
 # limitations under the License.
 # =============================================================================
 
-from lib import client
+import pytest
 
-if __name__ == "__main__":
-    client.main()
+from lib import server
+
+
+def test_parse_listen() -> None:
+    with pytest.raises(ValueError):
+        server.get_host_port_from_listen_string("badaddress 1234")
+
+    with pytest.raises(ValueError):
+        server.get_host_port_from_listen_string("127.0.0.1")
+
+    assert server.get_host_port_from_listen_string("127.0.0.1 1234") == (
+        "127.0.0.1",
+        1234,
+    )
+
+    assert server.get_host_port_from_listen_string("2001:db8::8a2e:370:7334 1234") == (
+        "2001:db8::8a2e:370:7334",
+        1234,
+    )
