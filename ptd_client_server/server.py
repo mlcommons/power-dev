@@ -15,9 +15,10 @@
 # =============================================================================
 
 from __future__ import annotations
-from typing import Optional, Dict, Tuple
 from decimal import Decimal
+from enum import Enum
 from ipaddress import ip_address
+from typing import Optional, Dict, Tuple
 import argparse
 import base64
 import configparser
@@ -46,6 +47,11 @@ RE_PTD_LOG = re.compile(
     re.X,
 )
 
+ANALYZER_SLEEP_SECONDS: float = 10
+
+if os.getenv("MLPP_DEBUG") is not None:
+    ANALYZER_SLEEP_SECONDS = 0.5
+
 
 def max_volts_amps(log_fname: str, mark: str) -> Tuple[str, str]:
     maxVolts = Decimal("-1")
@@ -62,6 +68,8 @@ def max_volts_amps(log_fname: str, mark: str) -> Tuple[str, str]:
 
 
 def read_log(log_fname: str, mark: str) -> str:
+    # TODO: The log file grows over time and never cleared.
+    #       Probably, we need to fseek() here instead of reading from the start.
     result = []
     with open(log_fname, "r") as f:
         for line in f:
@@ -166,7 +174,7 @@ class Ptd:
 
     def start(self) -> bool:
         if self._process is not None:
-            return False
+            return True
         if sys.platform == "win32":
             # shell=False:
             #   On Windows, we don't need a shell to run a command from a single
@@ -176,7 +184,7 @@ class Ptd:
             #
             # creationflags=subprocess.CREATE_NEW_PROCESS_GROUP:
             #   We do not want to pass ^C from the current console to the
-            #   PTDaemon.  Instead, we terminate it explicitly in self.stop().
+            #   PTDaemon.  Instead, we terminate it explicitly in self.terminate().
             self._process = subprocess.Popen(
                 self._command,
                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
@@ -198,7 +206,7 @@ class Ptd:
                 retries -= 1
         if s is None:
             logging.error("Could not connect to PTD")
-            self.stop()
+            self.terminate()
             return False
         self._socket = s
         self._proto = lib.Proto(s)
@@ -215,6 +223,9 @@ class Ptd:
         return True
 
     def stop(self) -> None:
+        self.cmd("Stop")
+
+    def terminate(self) -> None:
         if self._proto is not None:
             self.cmd("Stop")
             self.cmd(f"SR,V,{self._init_Volts}")
@@ -282,57 +293,40 @@ class Ptd:
 
 class Server:
     def __init__(self, config: ServerConfig) -> None:
-        self._ptd = Ptd(config.ptd_command, config.ptd_port)
-        self._mode: Optional[str] = None
-        self._mark: Optional[str] = None
-        self._ranging_table: Dict[str, Tuple[str, str]] = {}
+        self.session: Optional[Session] = None
         self._config = config
-
-    def close(self) -> None:
-        self._ptd.stop()
+        self._ptd = Ptd(config.ptd_command, config.ptd_port)
 
     def handle_connection(self, p: lib.Proto) -> None:
-        self._ranging_table = {}
-        self._mode = None
-        self._mark = None
+        while True:
+            with lib.sig:
+                cmd = p.recv()
+            if cmd is None:
+                logging.info("Connection closed")
+                break
+            logging.info(f"Got command from the client {cmd!r}")
 
-        if os.path.exists(self._config.ptd_logfile):
-            os.remove(self._config.ptd_logfile)
+            try:
+                reply = self._handle_cmd(cmd, p)
+            except KeyboardInterrupt:
+                break
+            except Exception:
+                logging.exception("Got an exception")
+                reply = "Error: exception"
 
-        try:
-            while True:
-                with lib.sig:
-                    cmd = p.recv()
+            if len(reply) < 1000:
+                logging.info(f"Sending reply to client {reply!r}")
+            else:
+                logging.info(
+                    f"Sending reply to client {reply[:50]!r}... len={len(reply)}"
+                )
+            p.send(reply)
 
-                if cmd is None:
-                    logging.info("Connection closed")
-                    break
-                logging.info(f"Got command from the client {cmd!r}")
-
-                try:
-                    reply = self._handle_cmd(cmd, p)
-                except KeyboardInterrupt:
-                    break
-                except Exception:
-                    logging.exception("Got an exception")
-                    reply = "Error: exception"
-
-                if len(reply) < 1000:
-                    logging.info(f"Sending reply to client {reply!r}")
-                else:
-                    logging.info(
-                        f"Sending reply to client {reply[:50]!r}... len={len(reply)}"
-                    )
-                p.send(reply)
-        finally:
-            self._ptd.stop()
-
-    def _set_range(self, volts_value: str, amps_value: str) -> None:
-        self._ptd.cmd(f"SR,V,{volts_value}")
-        self._ptd.cmd(f"SR,A,{amps_value}")
-        logging.info("Wait 10 seconds to apply setting for ampere and voltage")
-        with lib.sig:
-            time.sleep(10)
+    def handle_timeout(self) -> None:
+        if self.session is None:
+            return
+        logging.warning("Session timed out, dropping")
+        self._drop_session()
 
     def _handle_cmd(self, cmd: str, p: lib.Proto) -> str:
         cmd = cmd.split(",")
@@ -342,64 +336,196 @@ class Server:
             return "Hello from server!"
         if cmd[0] == "time":
             return str(time.time())
-        if cmd[0] == "init":
-            lib.ntp_sync(config.ntp_server)
-            if not self._ptd.start():
-                return "Error"
-            return "OK"
-        if cmd[0] == "start-ranging" and len(cmd) == 2:
-            self._set_range("Auto", "Auto")
-            logging.info("Starting ranging mode")
-            self._ptd.cmd(f"Go,1000,0,ranging-{cmd[1]}")
-            self._mode = "ranging"
-            self._mark = cmd[1]
-            return "OK"
-        if cmd[0] == "start-testing" and len(cmd) == 2:
-            maxVolts, maxAmps = self._ranging_table[cmd[1]]
-            self._set_range(maxVolts, maxAmps)
-            logging.info("Starting testing mode")
-            self._ptd.cmd(f"Go,1000,0,testing-{cmd[1]}")
-            self._mode = "testing"
-            self._mark = cmd[1]
-            return "OK"
-        if cmd[0] == "stop":
-            if self._mark is None:
-                return "Error"
-            self._ptd.cmd("Stop")
-            if self._mode == "ranging":
-                item = max_volts_amps(self._config.ptd_logfile, "ranging-" + self._mark)
-                logging.info(f"Result for {self._mark}: {item}")
-                self._ranging_table[self._mark] = item
-            self._last_log = read_log(
-                self._config.ptd_logfile, f"{self._mode}-{self._mark}"
-            )
-            self._mode = None
-            self._mark = None
-            return "OK"
-        if cmd[0] == "get-last-log":
-            return "base64 " + base64.b64encode(self._last_log.encode()).decode()
-        if cmd[0] == "get-log":
-            with open(self._config.ptd_logfile, "rb") as f:
-                data = f.read()
-            return "base64 " + base64.b64encode(data).decode()
-        if cmd[0] == "push-log" and len(cmd) == 2:
-            label = cmd[1]
-            if not lib.check_label(label):
+        if cmd[0] == "new" and len(cmd) == 2:
+            if self.session is not None:
+                self.session.drop()
+            if not lib.check_label(cmd[1]):
                 return "Error: invalid label"
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            dirname = os.path.join(self._config.out_dir, timestamp + "_" + label)
-            try:
-                p.recv_file(dirname + ".zip")
-                with zipfile.ZipFile(dirname + ".zip", "r") as zf:
-                    zf.extractall(dirname)
-            finally:
-                try:
-                    os.remove(dirname + ".zip")
-                except OSError:
-                    pass
-            return "OK"
+            self.session = Session(self, cmd[1])
+            return "OK " + self.session._id
+        if cmd[0] == "session" and len(cmd) >= 3:
+            if self.session is None or (self.session._id != cmd[1] and "*" != cmd[1]):
+                return "Error: unknown session"
+            cmd = cmd[2:]
 
-        return "Error: unknown command"
+            unbool = ["Error", "OK"]
+
+            if cmd == ["start", "ranging"]:
+                return unbool[self.session.start(Mode.RANGING)]
+            elif cmd == ["start", "testing"]:
+                return unbool[self.session.start(Mode.TESTING)]
+
+            if cmd == ["stop", "ranging"]:
+                return unbool[self.session.stop(Mode.RANGING)]
+            if cmd == ["stop", "testing"]:
+                return unbool[self.session.stop(Mode.TESTING)]
+
+            if cmd == ["upload", "ranging"] or cmd == ["upload", "testing"]:
+                mode = Mode.RANGING if cmd[1] == "ranging" else Mode.TESTING
+                fname = os.path.join(
+                    self._config.out_dir, self.session._id + cmd[1] + ".tmp"
+                )
+                result = False
+                try:
+                    p.recv_file(fname)
+                    result = self.session.upload(mode, fname)
+                finally:
+                    try:
+                        os.remove(fname)
+                    except OSError:
+                        pass
+                return unbool[result]
+
+            if cmd == ["done"]:
+                self._drop_session()
+                return "OK"
+
+            return "Error Unknown session command"
+
+        return "Error"
+
+    def _drop_session(self) -> None:
+        if self.session is not None:
+            try:
+                self.session.drop()
+            finally:
+                self.session = None
+
+    def close(self) -> None:
+        try:
+            self._drop_session()
+        finally:
+            self._ptd.terminate()
+
+
+class SessionState(Enum):
+    INITIAL = 0
+    RANGING = 1
+    RANGING_DONE = 2
+    TESTING = 3
+    TESTING_DONE = 4
+    DONE = 5
+
+
+class Mode(Enum):
+    RANGING = 0
+    TESTING = 1
+
+
+class Session:
+    def __init__(self, server: Server, label: str) -> None:
+        self._server: Server = server
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self._id: str = timestamp + "_" + label if label != "" else timestamp
+
+        # State
+        self._state = SessionState.INITIAL
+        self._maxAmps: Optional[str] = None
+        self._maxVolts: Optional[str] = None
+
+    def start(self, mode: Mode) -> bool:
+        if mode == Mode.RANGING and self._state == SessionState.RANGING:
+            return True
+        if mode == Mode.TESTING and self._state == SessionState.TESTING:
+            return True
+
+        if mode == Mode.RANGING and self._state == SessionState.INITIAL:
+            if not self._server._ptd.start():
+                return False
+
+            lib.ntp_sync(self._server._config.ntp_server)
+
+            self._server._ptd.cmd("SR,V,Auto")
+            self._server._ptd.cmd("SR,A,Auto")
+            with lib.sig:
+                time.sleep(ANALYZER_SLEEP_SECONDS)
+            logging.info("Starting ranging mode")
+            self._server._ptd.cmd(f"Go,1000,0,{self._id}_ranging")
+
+            self._state = SessionState.RANGING
+
+            return True
+
+        if mode == Mode.TESTING and self._state == SessionState.RANGING_DONE:
+            if not self._server._ptd.start():
+                return False
+
+            lib.ntp_sync(self._server._config.ntp_server)
+
+            self._server._ptd.cmd(f"SR,V,{self._maxVolts}")
+            self._server._ptd.cmd(f"SR,A,{self._maxAmps}")
+            with lib.sig:
+                time.sleep(ANALYZER_SLEEP_SECONDS)
+            logging.info("Starting testing mode")
+            self._server._ptd.cmd(f"Go,1000,0,{self._id}_testing")
+
+            self._state = SessionState.TESTING
+
+            return True
+
+        # Unexpected state
+        return False
+
+    def stop(self, mode: Mode) -> bool:
+        if mode == Mode.RANGING and self._state == SessionState.RANGING_DONE:
+            return True
+        if mode == Mode.TESTING and self._state == SessionState.TESTING_DONE:
+            return True
+
+        # TODO: handle exceptions?
+
+        if mode == Mode.RANGING and self._state == SessionState.RANGING:
+            self._state = SessionState.RANGING_DONE
+            self._server._ptd.stop()
+            dirname = os.path.join(self._server._config.out_dir, self._id + "_ranging")
+            os.mkdir(dirname)
+            with open(os.path.join(dirname, "spl.txt"), "w") as f:
+                f.write(
+                    read_log(self._server._config.ptd_logfile, self._id + "_ranging")
+                )
+            self._maxVolts, self._maxAmps = max_volts_amps(
+                self._server._config.ptd_logfile, self._id + "_ranging"
+            )
+            return True
+
+        if mode == Mode.TESTING and self._state == SessionState.TESTING:
+            self._state = SessionState.TESTING_DONE
+            self._server._ptd.stop()
+            dirname = os.path.join(self._server._config.out_dir, self._id + "_testing")
+            os.mkdir(dirname)
+            with open(os.path.join(dirname, "spl.txt"), "w") as f:
+                f.write(
+                    read_log(self._server._config.ptd_logfile, self._id + "_testing")
+                )
+            return True
+
+        # Unexpected state
+        return False
+
+    def upload(self, mode: Mode, fname: str) -> bool:
+        if mode == Mode.RANGING and self._state == SessionState.RANGING_DONE:
+            dirname = os.path.join(self._server._config.out_dir, self._id + "_ranging")
+            with zipfile.ZipFile(fname, "r") as zf:
+                zf.extractall(dirname)
+            return True
+        if mode == Mode.TESTING and self._state == SessionState.TESTING_DONE:
+            dirname = os.path.join(self._server._config.out_dir, self._id + "_testing")
+            with zipfile.ZipFile(fname, "r") as zf:
+                zf.extractall(dirname)
+            return True
+
+        # Unexpected state
+        return False
+
+    def drop(self) -> None:
+        try:
+            if (
+                self._state == SessionState.RANGING
+                or self._state == SessionState.TESTING
+            ):
+                self._server._ptd.stop()
+        finally:
+            self._state = SessionState.DONE
 
 
 lib.init("ptd-server")
@@ -426,7 +552,13 @@ lib.ntp_sync(config.ntp_server)
 
 server = Server(config)
 try:
-    lib.run_server(config.host, config.port, server.handle_connection)
+    lib.run_server(
+        config.host,
+        config.port,
+        server.handle_connection,
+        timeout=5,
+        handle_timeout=server.handle_timeout,
+    )
 except KeyboardInterrupt:
     pass
 finally:

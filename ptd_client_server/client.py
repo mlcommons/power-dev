@@ -82,7 +82,7 @@ parser.add_argument(
     "-n", "--ntp", metavar="ADDR", type=str,
     help="""NTP server address, optional""")
 parser.add_argument(
-    "-l", "--label", metavar="LABEL", type=str,
+    "-l", "--label", metavar="LABEL", type=str, default="",
     help="""a label to inclide into the directory name at the server""")
 parser_cmds = parser.add_argument_group(
     "Commands",
@@ -113,15 +113,8 @@ parser_cmds.add_argument(
 
 args = parser.parse_args()
 
-if args.label is not None:
-    if not lib.check_label(args.label):
-        parser.error(
-            "invalid --label value: {args.label!r}. Should be alphanumeric or -_."
-        )
-    log_name_prefix = args.label + "-"
-else:
-    log_name_prefix = ""
-    logging.warning("Assuming empty label (--label '')")
+if not lib.check_label(args.label):
+    parser.error("invalid --label value: {args.label!r}. Should be alphanumeric or -_.")
 
 if args.port is None:
     args.port = lib.DEFAULT_PORT
@@ -145,7 +138,12 @@ os.mkdir(args.output)
 
 lib.ntp_sync(args.ntp)
 
-command(serv, "init", check=True)
+session = command(serv, f"new,{args.label}")
+if session is None or not session.startswith("OK "):
+    logging.fatal("Could not start new session")
+    exit(1)
+session = session[len("OK ") :]
+logging.info(f"Session id is {session!r}")
 
 client_time1 = time.time()
 serv_time = float(command(serv, "time"))
@@ -173,14 +171,12 @@ for mode in ["ranging", "testing"]:
         subprocess.run(args.run_before, shell=True, check=True, env=env)
 
     lib.ntp_sync(args.ntp)
-    command(serv, f"start-{mode},workload", check=True)
+    command(serv, f"session,{session},start,{mode}", check=True)
 
     logging.info("Running runWorkload")
     subprocess.run(args.run_workload, shell=True, check=True, env=env)
 
-    command(serv, "stop", check=True)
-
-    command_get_file(serv, "get-last-log", out + "/spl.txt")
+    command(serv, f"session,{session},stop,{mode}", check=True)
 
     if args.run_after is not None:
         logging.info("Running runAfter")
@@ -188,13 +184,13 @@ for mode in ["ranging", "testing"]:
 
     logging.info("Packing logs into zip and uploading to the server")
     create_zip(f"{out}.zip", out)
-    serv.send(f"push-log,{log_name_prefix}{mode}")
+    serv.send(f"session,{session},upload,{mode}")
     serv.send_file(f"{out}.zip")
     logging.info(serv.recv())
 
 
 logging.info("Done runs")
 
-command_get_file(serv, "get-log", args.output + "/spl-full.txt")
+command(serv, f"session,{session},done", check=True)
 
 logging.info("Successful exit")
