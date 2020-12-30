@@ -52,7 +52,7 @@ def command_get_file(server: common.Proto, command: str, save_name: str) -> None
 
 
 def create_zip(zip_filename: str, dirname: str) -> None:
-    with zipfile.ZipFile(zip_filename, "x") as zf:
+    with zipfile.ZipFile(zip_filename, "x", zipfile.ZIP_DEFLATED) as zf:
         for folderName, subfolders, filenames in os.walk(dirname):
             for filename in filenames:
                 filePath = os.path.join(folderName, filename)
