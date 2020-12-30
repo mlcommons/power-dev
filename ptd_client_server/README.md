@@ -9,7 +9,7 @@ This client-server application is intended to measure the power consumed during 
 
 The server is intended to be run on the director (the machine on which PTDaemon runs), and the client is intended to be run on the SUT (system under test).
 
-The client accepts a list of workloads and their settings and a command to be run for each setting.
+The client accepts a shell command to run, i.e. the workload.
 The power is measured by the server during the command execution on a client.
 
 The command is run twice for each setting: the first time in ranging mode, and the second time is in testing mode.
@@ -115,31 +115,7 @@ The server has the following configuration keys related to log files:
     The name of the directory is determined by the workload script running on the SUT, e.g. `ssdmobilenet`.
   * The power log, named `spl.txt`, is extracted from the full PTDaemon log (`ptdLogfile`).
 
-## NTP Setup
-
-To make sure the Loadgen logs and PTDaemon logs match, the system time should be synchronized on the client and the server.
-Both the client and the server have an option to configure the NTP server address to sync with before running a workload.
-
-### Linux
-
-Prerequisites:
-1. Install `ntpdate` binary. Ubuntu package: `ntpdate`.
-2. Disable pre-existing `ntp` daemon if it is running. On Ubuntu: `systemctl disable ntp; systemctl stop ntp`.
-3. Root priveleges are required. Either run the script as root, or set up a passwordless `sudo`.
-
-The script will synchronize time using `ntpdate` binary.
-
-### Windows
-Prerequisites:
-1. Run the script as an administrator.
-
-The script would enable and configure `w32time` service automatically.
-
-# Keep-alive
-
-TODO: describe keep-alive
-
-# Result
+### Result
 
 After a successful run, you'll see these new files and directories on the server:
 ```
@@ -177,3 +153,35 @@ $PWD/client-log-dir
         ├── mlperf_log_summary.txt
         └── mlperf_log_trace.json
 ```
+
+## NTP Setup
+
+To make sure the Loadgen logs and PTDaemon logs match, the system time should be synchronized on the client and the server.
+Both the client and the server have an option to configure the NTP server address to sync with before running a workload.
+
+### Linux
+
+Prerequisites:
+1. Install `ntpdate` binary. Ubuntu package: `ntpdate`.
+2. Disable pre-existing `ntp` daemon if it is running. On Ubuntu: `systemctl disable ntp; systemctl stop ntp`.
+3. Root priveleges are required. Either run the script as root, or set up a passwordless `sudo`.
+
+The script will synchronize time using `ntpdate` binary.
+
+### Windows
+Prerequisites:
+1. Run the script as an administrator.
+
+The script would enable and configure `w32time` service automatically.
+
+## Unexpected test termination
+
+During the test, the client and the server maintain a persistent TCP connection.
+
+In the case of unexpected client disconnection, the server terminates the power measurement and consider the test failed.
+The client intentionally doesn't perform an attempt to reconnect to make the test strict.
+
+Additionally, [TCP keepalive] is used to detect a stale connection and don't let the server wait indefinitely in case if the client is powered off during the test or the network cable is cut.
+Keepalive packets are sent each 2 seconds, and we consider the connection broken after 10 missed keepalive responses.
+
+[TCP keepalive]: https://en.wikipedia.org/wiki/Keepalive#TCP_keepalive
