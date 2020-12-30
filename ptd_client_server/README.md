@@ -75,6 +75,34 @@ outDir: D:\ptd-logs\
 listen: 192.168.1.2 4950
 ```
 
+## Logs
+
+The purpose of this software is to produce two log files:
+* A loadgen log which is generated on the SUT by running an inference benchmark.
+* A power log that is generated on the server by PTDaemon.
+
+
+The client has two command-line options related to log files:
+
+* `--output "$PWD/out"`
+  An output directory to store loadgen logs.
+  The client does not override an existing directory.
+* `--label "mylabel"`
+  A human-readable label.
+  The label is used later at the server to distinguish between log directories.
+
+
+The server has the following configuration keys related to log files:
+
+* `ptdLogfile: D:\logs_ptdeamon.txt` — a path to the full PTDaemon log.
+  Note that in the current implementation this file is considered temporary and may be overwritten. 
+
+* `outDir: D:\ptd-logs\` — a directory to store output logs.
+  After each run, a new sub-directory inside this directory created, containing both a loadgen log and a power log for this run.
+  The name of this sub-directory consists of date, time, label, and mode (ranging/testing).
+  * The loadgen log is fetched from the client.
+    The name of the directory is determined by the workload script running on the SUT, e.g. `ssdmobilenet`.
+  * The power log, named `spl.txt`, is extracted from the full PTDaemon log (`ptdLogfile`).
 
 ## NTP Setup
 
@@ -95,3 +123,49 @@ Prerequisites:
 1. Run the script as an administrator.
 
 The script would enable and configure `w32time` service automatically.
+
+# Keep-alive
+
+TODO: describe keep-alive
+
+# Result
+
+After a successful run, you'll see these new files and directories on the server:
+
+```
+D:\ptd-logs\
+├── … (old entries skipped)
+├── 2020-12-28_15-20-52_mylabel_ranging
+│   ├── spl.txt                               ← power log
+│   └── ssdmobilenet                          ← loadgen log
+│       ├── mlperf_log_accuracy.json
+│       ├── mlperf_log_detail.txt
+│       ├── mlperf_log_summary.txt
+│       └── mlperf_log_trace.json
+└── 2020-12-28_15-20-52_mylabel_testing
+    ├── spl.txt                               ← power log
+    └── ssdmobilenet                          ← loadgen log
+        ├── mlperf_log_accuracy.json
+        ├── mlperf_log_detail.txt
+        ├── mlperf_log_summary.txt
+        └── mlperf_log_trace.json
+```
+
+And these on the client:
+```
+$PWD/out
+├── ranging
+│   └── ssdmobilenet                          ← loadgen log
+│       ├── mlperf_log_accuracy.json
+│       ├── mlperf_log_detail.txt
+│       ├── mlperf_log_summary.txt
+│       └── mlperf_log_trace.json
+├── ranging.zip                               ← loadgen log, zipped (used to send to the server)
+├── testing
+│   └── ssdmobilenet                          ← loadgen log
+│       ├── mlperf_log_accuracy.json
+│       ├── mlperf_log_detail.txt
+│       ├── mlperf_log_summary.txt
+│       └── mlperf_log_trace.json
+└── testing.zip                               ← loadgen log, zipped (used to send to the server)
+```
