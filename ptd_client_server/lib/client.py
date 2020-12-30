@@ -121,6 +121,7 @@ def main() -> None:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((args.addr, args.port))
     serv = common.Proto(s)
+    serv.enable_keepalive()
 
     if command(serv, "hello") != "Hello from server!":
         logging.fatal("Not a server")
