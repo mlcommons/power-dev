@@ -97,6 +97,9 @@ def main() -> None:
     parser.add_argument(
         "-w", "--run-workload", metavar="CMD", type=str, required=True,
         help="""a shell command to run under power measurement""")
+    parser.add_argument(
+        "-s", "--send-logs", action="store_true",
+        help="send loadgen logs to the server")
     # fmt: on
 
     args = parser.parse_args()
@@ -166,12 +169,16 @@ def main() -> None:
 
         command(serv, f"session,{session},stop,{mode}", check=True)
 
-        logging.info("Packing logs into zip and uploading to the server")
-        create_zip(f"{out}.zip", out)
-        serv.send(f"session,{session},upload,{mode}")
-        serv.send_file(f"{out}.zip")
-        logging.info(serv.recv())
-        os.remove(f"{out}.zip")
+        if args.send_logs:
+            logging.info("Packing logs into zip and uploading to the server")
+            create_zip(f"{out}.zip", out)
+            logging.info(
+                "Zip file size: " + common.human_bytes(os.stat(f"{out}.zip").st_size)
+            )
+            serv.send(f"session,{session},upload,{mode}")
+            serv.send_file(f"{out}.zip")
+            logging.info(serv.recv())
+            os.remove(f"{out}.zip")
 
     logging.info("Done runs")
 

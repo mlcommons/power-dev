@@ -330,3 +330,17 @@ def ntp_sync(server: Optional[str]) -> None:
         except Exception:
             logging.error("Could not sync time using ntpd.")
             raise
+
+
+def human_bytes(num: int) -> str:
+    num = float(num)
+    unit_labels = ["B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
+    last_label = unit_labels[-1]
+
+    for unit in unit_labels:
+        if num < 1000 - 0.05:
+            break
+        if unit != last_label:
+            num /= 1000
+
+    return f"{num:.1f} {unit}"
