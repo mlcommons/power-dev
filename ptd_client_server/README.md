@@ -38,6 +38,7 @@ export DATA_DIR=...
 
 ./client.py \
 	--ntp ntp.example.com \
+	--send-logs \
 	--label 'ssd-mobilenet-tf-offline' \
 	--run-workload '
 		cd /path/to/mlcommons/inference/vision/classification_and_detection &&
@@ -82,12 +83,20 @@ The purpose of this software is to produce two log files:
 * A power log that is generated on the server by PTDaemon.
 
 
-The client has two command-line options related to log files:
+The client has the following command-line options related to log files:
 
-* `--output "$PWD/out"`
+* `--output "$PWD/client-log-dir"`
+
   An output directory to store loadgen logs.
+  It is expected that the workload command will place loadgen logs into the location specified by the `"$out"` environment variable, which is pointed either to `ranging` or `testing` subdirectory inside the output directory.
   The client does not override an existing directory.
+
+* `--send-logs`
+
+  If enabled, then the loadgen log will be sent to the server and stored alongside the power log.
+
 * `--label "mylabel"`
+
   A human-readable label.
   The label is used later at the server to distinguish between log directories.
 
@@ -95,12 +104,14 @@ The client has two command-line options related to log files:
 The server has the following configuration keys related to log files:
 
 * `ptdLogfile: D:\logs_ptdeamon.txt` — a path to the full PTDaemon log.
+
   Note that in the current implementation this file is considered temporary and may be overwritten. 
 
 * `outDir: D:\ptd-logs\` — a directory to store output logs.
+
   After each run, a new sub-directory inside this directory created, containing both a loadgen log and a power log for this run.
   The name of this sub-directory consists of date, time, label, and mode (ranging/testing).
-  * The loadgen log is fetched from the client.
+  * The loadgen log is fetched from the client, if the `--send-logs` option is enabled.
     The name of the directory is determined by the workload script running on the SUT, e.g. `ssdmobilenet`.
   * The power log, named `spl.txt`, is extracted from the full PTDaemon log (`ptdLogfile`).
 
@@ -131,20 +142,19 @@ TODO: describe keep-alive
 # Result
 
 After a successful run, you'll see these new files and directories on the server:
-
 ```
 D:\ptd-logs\
 ├── … (old entries skipped)
 ├── 2020-12-28_15-20-52_mylabel_ranging
 │   ├── spl.txt                               ← power log
-│   └── ssdmobilenet                          ← loadgen log
+│   └── ssdmobilenet                          ← loadgen log (if --send-logs is used)
 │       ├── mlperf_log_accuracy.json
 │       ├── mlperf_log_detail.txt
 │       ├── mlperf_log_summary.txt
 │       └── mlperf_log_trace.json
 └── 2020-12-28_15-20-52_mylabel_testing
     ├── spl.txt                               ← power log
-    └── ssdmobilenet                          ← loadgen log
+    └── ssdmobilenet                          ← loadgen log (if --send-logs is used)
         ├── mlperf_log_accuracy.json
         ├── mlperf_log_detail.txt
         ├── mlperf_log_summary.txt
@@ -153,19 +163,17 @@ D:\ptd-logs\
 
 And these on the client:
 ```
-$PWD/out
+$PWD/client-log-dir
 ├── ranging
 │   └── ssdmobilenet                          ← loadgen log
 │       ├── mlperf_log_accuracy.json
 │       ├── mlperf_log_detail.txt
 │       ├── mlperf_log_summary.txt
 │       └── mlperf_log_trace.json
-├── ranging.zip                               ← loadgen log, zipped (used to send to the server)
-├── testing
-│   └── ssdmobilenet                          ← loadgen log
-│       ├── mlperf_log_accuracy.json
-│       ├── mlperf_log_detail.txt
-│       ├── mlperf_log_summary.txt
-│       └── mlperf_log_trace.json
-└── testing.zip                               ← loadgen log, zipped (used to send to the server)
+└── testing
+    └── ssdmobilenet                          ← loadgen log
+        ├── mlperf_log_accuracy.json
+        ├── mlperf_log_detail.txt
+        ├── mlperf_log_summary.txt
+        └── mlperf_log_trace.json
 ```
