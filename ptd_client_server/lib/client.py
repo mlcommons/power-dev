@@ -192,6 +192,7 @@ def main() -> None:
         serv.send(f"session,{session},upload,{mode}")
         serv.send_file(f"{out}.zip")
         logging.info(serv.recv())
+        os.remove(f"{out}.zip")
 
     logging.info("Done runs")
 
