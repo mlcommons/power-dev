@@ -9,7 +9,7 @@ This client-server application is intended to measure the power consumed during 
 
 The server is intended to be run on the director (the machine on which PTDaemon runs), and the client is intended to be run on the SUT (system under test).
 
-The client accepts a list of workloads and their settings and a command to be run for each setting.
+The client accepts a shell command to run, i.e. the workload.
 The power is measured by the server during the command execution on a client.
 
 The command is run twice for each setting: the first time in ranging mode, and the second time is in testing mode.
@@ -38,6 +38,7 @@ export DATA_DIR=...
 
 ./client.py \
 	--ntp ntp.example.com \
+	--send-logs \
 	--label 'ssd-mobilenet-tf-offline' \
 	--run-workload '
 		cd /path/to/mlcommons/inference/vision/classification_and_detection &&
@@ -75,6 +76,83 @@ outDir: D:\ptd-logs\
 listen: 192.168.1.2 4950
 ```
 
+## Logs
+
+The purpose of this software is to produce two log files:
+* A loadgen log which is generated on the SUT by running an inference benchmark.
+* A power log that is generated on the server by PTDaemon.
+
+
+The client has the following command-line options related to log files:
+
+* `--output "$PWD/client-log-dir"`
+
+  An output directory to store loadgen logs.
+  It is expected that the workload command will place loadgen logs into the location specified by the `"$out"` environment variable, which is pointed either to `ranging` or `testing` subdirectory inside the output directory.
+  The client does not override an existing directory.
+
+* `--send-logs`
+
+  If enabled, then the loadgen log will be sent to the server and stored alongside the power log.
+
+* `--label "mylabel"`
+
+  A human-readable label.
+  The label is used later at the server to distinguish between log directories.
+
+
+The server has the following configuration keys related to log files:
+
+* `ptdLogfile: D:\logs_ptdeamon.txt` — a path to the full PTDaemon log.
+
+  Note that in the current implementation this file is considered temporary and may be overwritten. 
+
+* `outDir: D:\ptd-logs\` — a directory to store output logs.
+
+  After each run, a new sub-directory inside this directory created, containing both a loadgen log and a power log for this run.
+  The name of this sub-directory consists of date, time, label, and mode (ranging/testing).
+  * The loadgen log is fetched from the client, if the `--send-logs` option is enabled.
+    The name of the directory is determined by the workload script running on the SUT, e.g. `ssdmobilenet`.
+  * The power log, named `spl.txt`, is extracted from the full PTDaemon log (`ptdLogfile`).
+
+### Result
+
+After a successful run, you'll see these new files and directories on the server:
+```
+D:\ptd-logs\
+├── … (old entries skipped)
+├── 2020-12-28_15-20-52_mylabel_ranging
+│   ├── spl.txt                               ← power log
+│   └── ssdmobilenet                          ← loadgen log (if --send-logs is used)
+│       ├── mlperf_log_accuracy.json
+│       ├── mlperf_log_detail.txt
+│       ├── mlperf_log_summary.txt
+│       └── mlperf_log_trace.json
+└── 2020-12-28_15-20-52_mylabel_testing
+    ├── spl.txt                               ← power log
+    └── ssdmobilenet                          ← loadgen log (if --send-logs is used)
+        ├── mlperf_log_accuracy.json
+        ├── mlperf_log_detail.txt
+        ├── mlperf_log_summary.txt
+        └── mlperf_log_trace.json
+```
+
+And these on the client:
+```
+$PWD/client-log-dir
+├── ranging
+│   └── ssdmobilenet                          ← loadgen log
+│       ├── mlperf_log_accuracy.json
+│       ├── mlperf_log_detail.txt
+│       ├── mlperf_log_summary.txt
+│       └── mlperf_log_trace.json
+└── testing
+    └── ssdmobilenet                          ← loadgen log
+        ├── mlperf_log_accuracy.json
+        ├── mlperf_log_detail.txt
+        ├── mlperf_log_summary.txt
+        └── mlperf_log_trace.json
+```
 
 ## NTP Setup
 
@@ -95,3 +173,15 @@ Prerequisites:
 1. Run the script as an administrator.
 
 The script would enable and configure `w32time` service automatically.
+
+## Unexpected test termination
+
+During the test, the client and the server maintain a persistent TCP connection.
+
+In the case of unexpected client disconnection, the server terminates the power measurement and consider the test failed.
+The client intentionally doesn't perform an attempt to reconnect to make the test strict.
+
+Additionally, [TCP keepalive] is used to detect a stale connection and don't let the server wait indefinitely in case if the client is powered off during the test or the network cable is cut.
+Keepalive packets are sent each 2 seconds, and we consider the connection broken after 10 missed keepalive responses.
+
+[TCP keepalive]: https://en.wikipedia.org/wiki/Keepalive#TCP_keepalive
