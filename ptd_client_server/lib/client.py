@@ -16,6 +16,7 @@
 
 import argparse
 import base64
+import inspect
 import logging
 import os
 import socket
@@ -67,6 +68,14 @@ def main() -> None:
         formatter_class=lambda prog: argparse.RawDescriptionHelpFormatter(
             prog, max_help_position=30
         ),
+        epilog=inspect.cleandoc(
+            """
+            The CMD could use the following environment variables:
+              $ranging - "1" in the ranging mode, or "0" in the testing mode.
+              $out     - Path to the output directory for this run.
+                         It should be either "OUTDIR/ranging" or "OUTDIR/testing".
+            """
+        ),
     )
 
     # fmt: off
@@ -77,7 +86,7 @@ def main() -> None:
         "-p", "--port", metavar="PORT", type=int, default=4950,
         help="server port, defaults to 4950")
     parser.add_argument(
-        "-o", "--output", metavar="DIR", type=str, required=True,
+        "-o", "--output", metavar="OUTDIR", type=str, required=True,
         help="output directory")
     parser.add_argument(
         "-n", "--ntp", metavar="ADDR", type=str,
@@ -85,31 +94,9 @@ def main() -> None:
     parser.add_argument(
         "-l", "--label", metavar="LABEL", type=str, default="",
         help="""a label to inclide into the directory name at the server""")
-    parser_cmds = parser.add_argument_group(
-        "Commands",
-        """The following are three shell commands to be executed.
-    Each of these would be executed twice: in the ranging, and in the testing modes.
-    Each command have the following environment variables:
-    "$ranging"  - "1" in the ranging mode, or "0" in the testing mode
-    "$out"      - path to the output directory for this run""")
-    parser_cmds.add_argument(
-        "--run-before", metavar="CMD", type=str,
-        help="""
-            A command to run before power measurement.
-            Some preparation could be done here, if necessary.
-        """)
-    parser_cmds.add_argument(
-        "--run-workload", metavar="CMD", type=str, required=True,
-        help="""
-            A command to run under power measurement.
-            An actual workload should be done here.
-        """)
-    parser_cmds.add_argument(
-        "--run-after", metavar="CMD", type=str,
-        help="""
-            A command to run after power measurement is done.
-            A cleanup or some log processing could be done here, if necessary.
-        """)
+    parser.add_argument(
+        "-w", "--run-workload", metavar="CMD", type=str, required=True,
+        help="""a shell command to run under power measurement""")
     # fmt: on
 
     args = parser.parse_args()
@@ -171,10 +158,6 @@ def main() -> None:
         env["ranging"] = "1" if mode == "ranging" else "0"
         env["out"] = out
 
-        if args.run_before is not None:
-            logging.info("Running runBefore")
-            subprocess.run(args.run_before, shell=True, check=True, env=env)
-
         common.ntp_sync(args.ntp)
         command(serv, f"session,{session},start,{mode}", check=True)
 
@@ -182,10 +165,6 @@ def main() -> None:
         subprocess.run(args.run_workload, shell=True, check=True, env=env)
 
         command(serv, f"session,{session},stop,{mode}", check=True)
-
-        if args.run_after is not None:
-            logging.info("Running runAfter")
-            subprocess.run(args.run_after, shell=True, check=True, env=env)
 
         logging.info("Packing logs into zip and uploading to the server")
         create_zip(f"{out}.zip", out)
