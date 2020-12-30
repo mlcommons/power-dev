@@ -149,6 +149,34 @@ class Proto:
             finally:
                 self._x = None
 
+    def enable_keepalive(self) -> None:
+        after_idle_sec = 2
+        interval_sec = 2
+        max_fails = 10  # Not configurable on Windows, hardcoded to 10.
+        # The connection considered timed out after
+        # `after_idle_sec + (interval_sec * max_fails)` seconds of idle.
+
+        if self._x is None:
+            return
+        if sys.platform == "win32":
+            self._x.ioctl(
+                socket.SIO_KEEPALIVE_VALS,
+                (1, after_idle_sec * 1000, interval_sec * 1000),
+            )
+        elif sys.platform == "linux":
+            self._x.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            self._x.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, after_idle_sec)
+            self._x.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, interval_sec)
+            self._x.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, max_fails)
+        elif sys.platform == "darwin":
+            TCP_KEEPALIVE = 0x10
+            self._x.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            self._x.setsockopt(socket.IPPROTO_TCP, TCP_KEEPALIVE, interval_sec)
+        else:
+            logging.warning(
+                "Keepalive not implemented for this platform ({sys.platform!r})"
+            )
+
 
 class SignalHandler:
     # See also:

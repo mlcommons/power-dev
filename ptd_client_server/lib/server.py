@@ -298,6 +298,7 @@ class Server:
         self._ptd = Ptd(config.ptd_command, config.ptd_port)
 
     def handle_connection(self, p: common.Proto) -> None:
+        p.enable_keepalive()
         while True:
             with common.sig:
                 cmd = p.recv()
