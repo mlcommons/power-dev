@@ -185,3 +185,7 @@ Additionally, [TCP keepalive] is used to detect a stale connection and don't let
 Keepalive packets are sent each 2 seconds, and we consider the connection broken after 10 missed keepalive responses.
 
 [TCP keepalive]: https://en.wikipedia.org/wiki/Keepalive#TCP_keepalive
+
+## Client-server communication sequence diagram
+
+[Rendered](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/mlcommons/power/master/ptd_client_server/doc/sequence.puml)
