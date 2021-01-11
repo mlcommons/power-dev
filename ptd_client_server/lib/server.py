@@ -53,6 +53,14 @@ if os.getenv("MLPP_DEBUG") is not None:
     ANALYZER_SLEEP_SECONDS = 0.5
 
 
+class MeasurementEndedTooFastError(Exception):
+    pass
+
+
+class MaxVoltsAmpsNegativeValuesError(Exception):
+    pass
+
+
 def max_volts_amps(log_fname: str, mark: str) -> Tuple[str, str]:
     maxVolts = Decimal("-1")
     maxAmps = Decimal("-1")
@@ -63,7 +71,7 @@ def max_volts_amps(log_fname: str, mark: str) -> Tuple[str, str]:
                 maxVolts = max(maxVolts, Decimal(m["v"]))
                 maxAmps = max(maxAmps, Decimal(m["a"]))
     if maxVolts <= 0 or maxAmps <= 0:
-        raise RuntimeError(f"Could not find values for {mark!r}")
+        raise MaxVoltsAmpsNegativeValuesError(f"Could not find values for {mark!r}")
     return str(maxVolts), str(maxAmps)
 
 
@@ -311,6 +319,9 @@ class Server:
                 reply = self._handle_cmd(cmd, p)
             except KeyboardInterrupt:
                 break
+            except MeasurementEndedTooFastError as e:
+                logging.error(f"Got an exception: {e.args[0]}")
+                reply = f"Error: {e.args[0]}"
             except Exception:
                 logging.exception("Got an exception")
                 reply = "Error: exception"
@@ -416,6 +427,7 @@ class Mode(Enum):
 class Session:
     def __init__(self, server: Server, label: str) -> None:
         self._server: Server = server
+        self._go_command_time: Optional[datetime.datetime] = None
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         self._id: str = timestamp + "_" + label if label != "" else timestamp
 
@@ -442,6 +454,7 @@ class Session:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting ranging mode")
             self._server._ptd.cmd(f"Go,1000,0,{self._id}_ranging")
+            self._go_command_time = datetime.datetime.now()
 
             self._state = SessionState.RANGING
 
@@ -478,15 +491,26 @@ class Session:
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
             self._state = SessionState.RANGING_DONE
             self._server._ptd.stop()
+            assert self._go_command_time is not None
+            test_duration = datetime.datetime.now() - self._go_command_time
             dirname = os.path.join(self._server._config.out_dir, self._id + "_ranging")
             os.mkdir(dirname)
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
                 f.write(
                     read_log(self._server._config.ptd_logfile, self._id + "_ranging")
                 )
-            self._maxVolts, self._maxAmps = max_volts_amps(
-                self._server._config.ptd_logfile, self._id + "_ranging"
-            )
+            try:
+                self._maxVolts, self._maxAmps = max_volts_amps(
+                    self._server._config.ptd_logfile, self._id + "_ranging"
+                )
+            except MaxVoltsAmpsNegativeValuesError as e:
+                if test_duration.seconds < 1:
+                    raise MeasurementEndedTooFastError(
+                        f"the ranging measurement ended too fast (less than 1 seconds), no PTDaemon logs generated for {self._id!r}"
+                    ) from e
+                else:
+                    raise MaxVoltsAmpsNegativeValuesError(e.args[0])
+            self._go_command_time = None
             return True
 
         if mode == Mode.TESTING and self._state == SessionState.TESTING:
