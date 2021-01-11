@@ -307,38 +307,37 @@ class Server:
 
     def handle_connection(self, p: common.Proto) -> None:
         p.enable_keepalive()
-        while True:
-            with common.sig:
-                cmd = p.recv()
-            if cmd is None:
-                logging.info("Connection closed")
-                break
-            logging.info(f"Got command from the client {cmd!r}")
+        try:
+            while True:
+                with common.sig:
+                    cmd = p.recv()
+                if cmd is None:
+                    logging.info("Connection closed")
+                    break
+                logging.info(f"Got command from the client {cmd!r}")
 
-            try:
-                reply = self._handle_cmd(cmd, p)
-            except KeyboardInterrupt:
-                break
-            except MeasurementEndedTooFastError as e:
-                logging.error(f"Got an exception: {e.args[0]}")
-                reply = f"Error: {e.args[0]}"
-            except Exception:
-                logging.exception("Got an exception")
-                reply = "Error: exception"
+                try:
+                    reply = self._handle_cmd(cmd, p)
+                except KeyboardInterrupt:
+                    break
+                except MeasurementEndedTooFastError as e:
+                    logging.error(f"Got an exception: {e.args[0]}")
+                    reply = f"Error: {e.args[0]}"
+                except Exception:
+                    logging.exception("Got an exception")
+                    reply = "Error: exception"
 
-            if len(reply) < 1000:
-                logging.info(f"Sending reply to client {reply!r}")
-            else:
-                logging.info(
-                    f"Sending reply to client {reply[:50]!r}... len={len(reply)}"
-                )
-            p.send(reply)
-
-    def handle_timeout(self) -> None:
-        if self.session is None:
-            return
-        logging.warning("Session timed out, dropping")
-        self._drop_session()
+                if len(reply) < 1000:
+                    logging.info(f"Sending reply to client {reply!r}")
+                else:
+                    logging.info(
+                        f"Sending reply to client {reply[:50]!r}... len={len(reply)}"
+                    )
+                p.send(reply)
+        finally:
+            if self.session is not None:
+                logging.warning("Client connection closed unexpectedly")
+                self._drop_session()
 
     def _handle_cmd(self, cmd: str, p: common.Proto) -> str:
         cmd = cmd.split(",")
@@ -582,8 +581,6 @@ def main() -> None:
             config.host,
             config.port,
             server.handle_connection,
-            timeout=5,
-            handle_timeout=server.handle_timeout,
         )
     except KeyboardInterrupt:
         pass

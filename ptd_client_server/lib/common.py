@@ -227,8 +227,6 @@ def run_server(
     host: str,
     port: int,
     handle: Callable[[Proto], None],
-    timeout: Optional[float] = None,
-    handle_timeout: Optional[Callable[[], None]] = None,
 ) -> None:
     class Handler(socketserver.BaseRequestHandler):
         def handle(self) -> None:
@@ -240,19 +238,9 @@ def run_server(
                 logging.exception("Got an exception")
             logging.info("Done processing")
 
-    timeout_ = timeout
-
     class Server(socketserver.TCPServer):
         allow_reuse_address = True
-        timeout = timeout_
-
-        def handle_timeout(self) -> None:
-            if handle_timeout is None:
-                return
-            try:
-                handle_timeout()
-            except Exception:
-                logging.exception("Got an exception")
+        timeout = 0.5  # same as default poll_interval in server_forever()
 
     done = False
 
