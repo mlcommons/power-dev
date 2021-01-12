@@ -154,21 +154,35 @@ def main() -> None:
 
     for mode in ["ranging", "testing"]:
         logging.info(f"Running workload in {mode} mode")
-        out = f"{args.output}/{mode}"
+        out = os.path.join(args.output, mode)
 
         os.mkdir(out)
 
-        env = os.environ.copy()
-        env["ranging"] = "1" if mode == "ranging" else "0"
-        env["out"] = out
+        newEnv = {
+            "ranging": "1" if mode == "ranging" else "0",
+            "out": out,
+        }
+        env = dict(os.environ.copy(), **newEnv)
 
         common.ntp_sync(args.ntp)
         command(serv, f"session,{session},start,{mode}", check=True)
 
-        logging.info("Running runWorkload")
+        logging.info(f"Running the workload {args.run_workload!r}")
+        logging.info(
+            "Environment variables: "
+            + " ".join((f"{n}={v!r}" for n, v in newEnv.items()))
+        )
         subprocess.run(args.run_workload, shell=True, check=True, env=env)
 
         command(serv, f"session,{session},stop,{mode}", check=True)
+
+        if len(os.listdir(out)) == 0:
+            logging.fatal(f"The directory {out!r} is empty")
+            logging.fatal(
+                "Please make sure that the provided workload command writes its "
+                "output into the directory specified by environment variable $out"
+            )
+            exit(1)
 
         if args.send_logs:
             logging.info("Packing logs into zip and uploading to the server")
