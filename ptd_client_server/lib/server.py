@@ -20,6 +20,7 @@ from enum import Enum
 from ipaddress import ip_address
 from typing import Optional, Dict, Tuple
 import argparse
+import time
 import base64
 import configparser
 import datetime
@@ -426,7 +427,7 @@ class Mode(Enum):
 class Session:
     def __init__(self, server: Server, label: str) -> None:
         self._server: Server = server
-        self._go_command_time: Optional[datetime.datetime] = None
+        self._go_command_time: Optional[float] = None
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         self._id: str = timestamp + "_" + label if label != "" else timestamp
 
@@ -453,7 +454,7 @@ class Session:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting ranging mode")
             self._server._ptd.cmd(f"Go,1000,0,{self._id}_ranging")
-            self._go_command_time = datetime.datetime.now()
+            self._go_command_time = time.monotonic()
 
             self._state = SessionState.RANGING
 
@@ -491,7 +492,7 @@ class Session:
             self._state = SessionState.RANGING_DONE
             self._server._ptd.stop()
             assert self._go_command_time is not None
-            test_duration = datetime.datetime.now() - self._go_command_time
+            test_duration = time.monotonic() - self._go_command_time
             dirname = os.path.join(self._server._config.out_dir, self._id + "_ranging")
             os.mkdir(dirname)
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
@@ -503,17 +504,19 @@ class Session:
                     self._server._config.ptd_logfile, self._id + "_ranging"
                 )
             except MaxVoltsAmpsNegativeValuesError as e:
-                if test_duration.seconds < 1:
+                if test_duration < 1:
                     raise MeasurementEndedTooFastError(
-                        f"the ranging measurement ended too fast (less than 1 seconds), no PTDaemon logs generated for {self._id!r}"
+                        f"the ranging measurement ended too fast (less than 1 second), no PTDaemon logs generated for {self._id!r}"
                     ) from e
                 else:
-                    raise MaxVoltsAmpsNegativeValuesError(e.args[0])
+                    raise
             self._go_command_time = None
             return True
 
         if mode == Mode.TESTING and self._state == SessionState.TESTING:
             self._state = SessionState.TESTING_DONE
+            with common.sig:
+                time.sleep(ANALYZER_SLEEP_SECONDS)
             self._server._ptd.stop()
             dirname = os.path.join(self._server._config.out_dir, self._id + "_testing")
             os.mkdir(dirname)
