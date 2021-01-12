@@ -181,9 +181,16 @@ class Ptd:
         self._init_Amps: Optional[str] = None
         self._init_Volts: Optional[str] = None
 
-    def start(self) -> bool:
+    def start(self) -> None:
+        try:
+            self._start()
+        except Exception:
+            logging.exception("Could not start PTDaemon")
+            exit(1)
+
+    def _start(self) -> None:
         if self._process is not None:
-            return True
+            return
         if sys.platform == "win32":
             # shell=False:
             #   On Windows, we don't need a shell to run a command from a single
@@ -205,6 +212,8 @@ class Ptd:
         s = None
         while s is None and retries > 0:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if self._process.poll() is not None:
+                raise RuntimeError("PTDaemon unexpectedly terminated")
             try:
                 s.connect(("127.0.0.1", self._port))
             except ConnectionRefusedError:
@@ -214,22 +223,19 @@ class Ptd:
                 s = None
                 retries -= 1
         if s is None:
-            logging.error("Could not connect to PTD")
             self.terminate()
-            return False
+            raise RuntimeError("Could not connect to PTDaemon")
         self._socket = s
         self._proto = common.Proto(s)
 
         if self.cmd("Hello") != "Hello, PTDaemon here!":
-            logging.error("This is not PTDaemon")
-            return False
+            raise RuntimeError("This is not PTDaemon")
 
         self.cmd("Identify")  # reply traced in logs
 
         logging.info("Connected to PTDaemon")
 
         self._get_initial_range()
-        return True
 
     def stop(self) -> None:
         self.cmd("Stop")
@@ -267,6 +273,8 @@ class Ptd:
         logging.info(f"Sending to ptd: {cmd!r}")
         self._proto.send(cmd)
         reply = self._proto.recv()
+        if reply is None:
+            exit_with_error_msg("Got no reply from PTDaemon")
         logging.info(f"Reply from ptd: {reply!r}")
         return reply
 
@@ -443,8 +451,7 @@ class Session:
             return True
 
         if mode == Mode.RANGING and self._state == SessionState.INITIAL:
-            if not self._server._ptd.start():
-                return False
+            self._server._ptd.start()
 
             common.ntp_sync(self._server._config.ntp_server)
 
@@ -461,8 +468,7 @@ class Session:
             return True
 
         if mode == Mode.TESTING and self._state == SessionState.RANGING_DONE:
-            if not self._server._ptd.start():
-                return False
+            self._server._ptd.start()
 
             common.ntp_sync(self._server._config.ntp_server)
 
