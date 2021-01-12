@@ -20,7 +20,6 @@ from enum import Enum
 from ipaddress import ip_address
 from typing import Optional, Dict, Tuple
 import argparse
-import time
 import base64
 import configparser
 import datetime

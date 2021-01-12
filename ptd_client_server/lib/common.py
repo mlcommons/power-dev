@@ -23,7 +23,6 @@ import socketserver
 import string
 import subprocess
 import sys
-import threading
 
 
 DEFAULT_PORT = 4950
