@@ -111,7 +111,10 @@ def get_host_port_from_listen_string(listen_str: str) -> Tuple[str, int]:
 class ServerConfig:
     def __init__(self, filename: str) -> None:
         conf = configparser.ConfigParser()
-        conf.read_file(open(filename))
+        try:
+            conf.read_file(open(filename))
+        except FileNotFoundError:
+            exit_with_error_msg(f"Configuration file '{filename}' does not exist.")
 
         try:
             serv_conf = conf["server"]
