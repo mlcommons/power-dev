@@ -319,6 +319,22 @@ def ntp_sync(server: Optional[str]) -> None:
             raise
 
 
+def mkdir_if_ne(path: str) -> None:
+    """mkdir if not exists"""
+    # TODO: check permissions?
+    logging.info(f"Creating output directory {path!r}")
+
+    if not os.path.exists(path):
+        try:
+            os.mkdir(path)
+        except FileNotFoundError:
+            logging.fatal(
+                f"Could not create directory {path!r}. "
+                "Make sure all intermediate directories exist."
+            )
+            exit(1)
+
+
 def human_bytes(num: int) -> str:
     num = float(num)
     unit_labels = ["B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]

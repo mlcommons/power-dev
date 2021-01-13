@@ -1,18 +1,30 @@
-## Dependencies
-
-* Python 3.7.
-* PTDaemon (on the server)
-
 ## Description
 
-This client-server application is intended to measure the power consumed during an execution of a list of workloads.
+This client-server application is intended to measure the power consumed during an execution of the specified workload.
 
-The server is intended to be run on the director (the machine on which PTDaemon runs), and the client is intended to be run on the SUT (system under test).
+The server is intended to be run on the director (the machine on which PTDaemon runs),
+and the client is intended to be run on the SUT (system under test).
 
 The client accepts a shell command to run, i.e. the workload.
 The power is measured by the server during the command execution on a client.
 
 The command is run twice for each setting: the first time in ranging mode, and the second time is in testing mode.
+
+## Prerequisites
+
+* Python 3.7 or newer
+* Supported OS: Windows or Linux
+* PTDaemon (on the server)
+* On Linux: `ntpdate`, optional.
+* Assuming you are able to run the required [inference] submission.
+  In the README we use [ssd-mobilenet] as an example.
+
+[inference]: https://github.com/mlcommons/inference
+[ssd-mobilenet]: https://github.com/mlcommons/inference/tree/master/vision/classification_and_detection
+
+## Installation
+
+`git clone https://github.com/mlcommons/power`
 
 ## Usage
 
@@ -32,20 +44,24 @@ See `./client.py --help` for option description.
 
 ## Configuration examples
 
+Shell command to run on the SUT:
+
 ```sh
+#!/bin/bash
+
 export MODEL_DIR=...
 export DATA_DIR=...
 
+cd /path/to/mlcommons/inference/vision/classification_and_detection
+
 ./client.py \
 	--ntp ntp.example.com \
-	--send-logs \
 	--label 'ssd-mobilenet-tf-offline' \
-	--run-workload '
-		cd /path/to/mlcommons/inference/vision/classification_and_detection &&
-		./run_local.sh tf ssd-mobilenet cpu --scenario Offline --output "$out"/ssdmobilenet
-	' \
-	--output "$PWD/out" \
-	-a 192.168.104.169
+	--run-workload './run_local.sh tf ssd-mobilenet cpu --scenario Offline' \
+	--loadgen-logs './output/tf-cpu/ssd-mobilenet' \
+	--output './power-results/' \
+	--send-logs \
+	--addr 192.168.104.169
 ```
 
 Server configuration:
@@ -85,11 +101,14 @@ The purpose of this software is to produce two log files:
 
 The client has the following command-line options related to log files:
 
+* `--loadgen-logs "./output/tf-cpu/ssd-mobilenet"`
+
+  A directory to get loadgen logs from.
+  The workload command should place inside this directory.
+
 * `--output "$PWD/client-log-dir"`
 
-  An output directory to store loadgen logs.
-  It is expected that the workload command will place loadgen logs into the location specified by the `"$out"` environment variable, which is pointed either to `ranging` or `testing` subdirectory inside the output directory.
-  The client does not override an existing directory.
+  An output directory to put loadgen logs.
 
 * `--send-logs`
 
@@ -105,7 +124,7 @@ The server has the following configuration keys related to log files:
 
 * `ptdLogfile: D:\logs_ptdeamon.txt` — a path to the full PTDaemon log.
 
-  Note that in the current implementation this file is considered temporary and may be overwritten. 
+  Note that in the current implementation this file is considered temporary and may be overwritten.
 
 * `outDir: D:\ptd-logs\` — a directory to store output logs.
 
@@ -122,36 +141,33 @@ After a successful run, you'll see these new files and directories on the server
 D:\ptd-logs\
 ├── … (old entries skipped)
 ├── 2020-12-28_15-20-52_mylabel_ranging
-│   ├── spl.txt                               ← power log
-│   └── ssdmobilenet                          ← loadgen log (if --send-logs is used)
-│       ├── mlperf_log_accuracy.json
-│       ├── mlperf_log_detail.txt
-│       ├── mlperf_log_summary.txt
-│       └── mlperf_log_trace.json
+│   ├── spl.txt                           ← power log
+│   ├── mlperf_log_accuracy.json        ┐
+│   ├── mlperf_log_detail.txt           │ ← loadgen log (if --send-logs is used)
+│   ├── mlperf_log_summary.txt          │
+│   └── mlperf_log_trace.json           ┘
 └── 2020-12-28_15-20-52_mylabel_testing
-    ├── spl.txt                               ← power log
-    └── ssdmobilenet                          ← loadgen log (if --send-logs is used)
-        ├── mlperf_log_accuracy.json
-        ├── mlperf_log_detail.txt
-        ├── mlperf_log_summary.txt
-        └── mlperf_log_trace.json
+    ├── spl.txt                           ← power log
+    ├── mlperf_log_accuracy.json        ┐
+    ├── mlperf_log_detail.txt           │ ← loadgen log (if --send-logs is used)
+    ├── mlperf_log_summary.txt          │
+    └── mlperf_log_trace.json           ┘
 ```
 
 And these on the client:
 ```
 $PWD/client-log-dir
-├── ranging
-│   └── ssdmobilenet                          ← loadgen log
-│       ├── mlperf_log_accuracy.json
-│       ├── mlperf_log_detail.txt
-│       ├── mlperf_log_summary.txt
-│       └── mlperf_log_trace.json
-└── testing
-    └── ssdmobilenet                          ← loadgen log
-        ├── mlperf_log_accuracy.json
-        ├── mlperf_log_detail.txt
-        ├── mlperf_log_summary.txt
-        └── mlperf_log_trace.json
+├── … (old entries skipped)
+├── 2020-12-28_15-20-52_mylabel_ranging
+│   ├── mlperf_log_accuracy.json
+│   ├── mlperf_log_detail.txt
+│   ├── mlperf_log_summary.txt
+│   └── mlperf_log_trace.json
+└── 2020-12-28_15-20-52_mylabel_testing
+    ├── mlperf_log_accuracy.json
+    ├── mlperf_log_detail.txt
+    ├── mlperf_log_summary.txt
+    └── mlperf_log_trace.json
 ```
 
 ## NTP Setup

@@ -575,14 +575,7 @@ def main() -> None:
 
     config = ServerConfig(args.configurationFile)
 
-    if not os.path.exists(config.out_dir):
-        try:
-            os.mkdir(config.out_dir)
-        except FileNotFoundError:
-            exit_with_error_msg(
-                f"Could not create directory {config.out_dir!r}. "
-                "Make sure all intermediate directories exist."
-            )
+    common.mkdir_if_ne(config.out_dir)
 
     common.ntp_sync(config.ntp_server)
 
