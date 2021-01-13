@@ -268,7 +268,7 @@ def init(name: str) -> None:
 
 def ntp_sync(server: Optional[str]) -> None:
     if server == "" or server is None:
-        logging.info("No NTP server configured. Skipping NTP sync.")
+        logging.warning("No NTP server configured. Skipping NTP sync.")
         return
 
     logging.info(f"Synchronizing with {server!r} time using NTP...")
