@@ -119,7 +119,13 @@ def main() -> None:
         exit(1)
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((args.addr, args.port))
+    try:
+        s.connect((args.addr, args.port))
+    except OSError as e:
+        s.close()
+        logging.fatal(f"Could not connect to the server {args.addr}:{args.port} {e}")
+        exit(1)
+
     serv = common.Proto(s)
     serv.enable_keepalive()
 
