@@ -16,9 +16,9 @@
 
 import argparse
 import base64
-import inspect
 import logging
 import os
+import shutil
 import socket
 import subprocess
 import time
@@ -66,42 +66,45 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="PTD client",
         formatter_class=lambda prog: argparse.RawDescriptionHelpFormatter(
-            prog, max_help_position=30
-        ),
-        epilog=inspect.cleandoc(
-            """
-            The CMD could use the following environment variables:
-              $ranging - "1" in the ranging mode, or "0" in the testing mode.
-              $out     - Path to the output directory for this run.
-                         It should be either "OUTDIR/ranging" or "OUTDIR/testing".
-            """
+            prog, max_help_position=35
         ),
     )
 
+    optional = parser._action_groups.pop()
+    required = parser.add_argument_group("required arguments")
+
     # fmt: off
-    parser.add_argument(
+    required.add_argument(
         "-a", "--addr", metavar="ADDR", type=str, required=True,
         help="server address")
+    required.add_argument(
+        "-w", "--run-workload", metavar="CMD", type=str, required=True,
+        help="a shell command to run under power measurement")
+    required.add_argument(
+        "-L", "--loadgen-logs", metavar="INDIR", type=str, required=True,
+        help="collect loadgen logs from INDIR")
+    required.add_argument(
+        "-o", "--output", metavar="OUTDIR", type=str, required=True,
+        help="put logs into OUTDIR (copied from INDIR)")
+
     parser.add_argument(
         "-p", "--port", metavar="PORT", type=int, default=4950,
         help="server port, defaults to 4950")
     parser.add_argument(
-        "-o", "--output", metavar="OUTDIR", type=str, required=True,
-        help="output directory")
-    parser.add_argument(
         "-n", "--ntp", metavar="ADDR", type=str,
-        help="""NTP server address, optional""")
+        help="NTP server address, optional")
     parser.add_argument(
         "-l", "--label", metavar="LABEL", type=str, default="",
-        help="""a label to inclide into the directory name at the server""")
-    parser.add_argument(
-        "-w", "--run-workload", metavar="CMD", type=str, required=True,
-        help="""a shell command to run under power measurement""")
+        help="a label to include into the resulting directory name")
     parser.add_argument(
         "-s", "--send-logs", action="store_true",
         help="send loadgen logs to the server")
+    parser.add_argument(
+        "-f", "--force", action="store_true",
+        help="force remove loadgen logs directory (INDIR)")
     # fmt: on
 
+    parser._action_groups.append(optional)
     args = parser.parse_args()
 
     if not common.check_label(args.label):
@@ -113,10 +116,20 @@ def main() -> None:
         args.port = common.DEFAULT_PORT
         logging.warning(f"Assuming default port (--port {common.DEFAULT_PORT}")
 
-    if os.path.exists(args.output):
-        logging.fatal(f"The output directory {args.output!r} already exists.")
-        logging.fatal("Please remove it or select another directory.")
-        exit(1)
+    if os.path.exists(args.loadgen_logs):
+        if args.force:
+            logging.warning(
+                f"Removing old loadgen logs directory {args.loadgen_logs!r}"
+            )
+            shutil.rmtree(args.loadgen_logs)
+        else:
+            logging.fatal(
+                f"The loadgen logs directory {args.loadgen_logs!r} already exists"
+            )
+            logging.fatal("Please remove it or specify --force argument")
+            exit(1)
+
+    common.mkdir_if_ne(args.output)
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -132,9 +145,6 @@ def main() -> None:
     if command(serv, "hello") != "Hello from server!":
         logging.fatal("Not a server")
         exit(1)
-
-    logging.info(f"Creating output directory {args.output!r}")
-    os.mkdir(args.output)
 
     common.ntp_sync(args.ntp)
 
@@ -160,27 +170,28 @@ def main() -> None:
 
     for mode in ["ranging", "testing"]:
         logging.info(f"Running workload in {mode} mode")
-        out = os.path.join(args.output, mode)
+        out = os.path.join(args.output, f"{session}_{mode}")
 
-        os.mkdir(out)
-
-        newEnv = {
-            "ranging": "1" if mode == "ranging" else "0",
-            "out": out,
-        }
-        env = dict(os.environ.copy(), **newEnv)
+        # os.mkdir(out)
 
         common.ntp_sync(args.ntp)
         command(serv, f"session,{session},start,{mode}", check=True)
 
         logging.info(f"Running the workload {args.run_workload!r}")
-        logging.info(
-            "Environment variables: "
-            + " ".join((f"{n}={v!r}" for n, v in newEnv.items()))
-        )
-        subprocess.run(args.run_workload, shell=True, check=True, env=env)
+        subprocess.run(args.run_workload, shell=True, check=True)
 
         command(serv, f"session,{session},stop,{mode}", check=True)
+
+        if (
+            not os.path.isdir(args.loadgen_logs)
+            or len(os.listdir(args.loadgen_logs)) == 0
+        ):
+            logging.fatal(
+                f"Expected {args.loadgen_logs!r} to be a directory containing loadgen logs, but it is not"
+            )
+            exit(1)
+
+        shutil.move(args.loadgen_logs, out)
 
         if len(os.listdir(out)) == 0:
             logging.fatal(f"The directory {out!r} is empty")
