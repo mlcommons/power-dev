@@ -238,8 +238,18 @@ def run_server(
             logging.info("Done processing")
 
     class Server(socketserver.TCPServer):
-        allow_reuse_address = True
-        timeout = 0.5  # same as default poll_interval in server_forever()
+        # There are two independent toggles for the server socket.
+        # 1. Allow two or more servers to run on the same port simultaneously.
+        #    We do not need this.
+        # 2. Allow the server to bind to the same port shortly after
+        #    the server restart (`TIME_WAIT` state). We need this.
+        # The problem that on Windows, allow_reuse_address controls
+        # the first toggle, and on Linux, it controls the second toggle.
+        # See also: https://bugs.python.org/issue41135
+        allow_reuse_address = True if sys.platform != "win32" else False
+
+        # same as default poll_interval in server_forever()
+        timeout = 0.5
 
     done = False
 
