@@ -10,6 +10,8 @@ The power is measured by the server during the command execution on a client.
 
 The command is run twice for each setting: the first time in ranging mode, and the second time is in testing mode.
 
+Client-server sequence diagram: [sequence.png](./doc/sequence.png)
+
 ## Prerequisites
 
 * Python 3.7 or newer
@@ -33,11 +35,11 @@ Start a server (on a director):
 ./server.py -c server-config.conf
 ```
 
-Then start a client (on a SUT), assuming the director is located at `192.168.100.200`.
+Then start a client (on a SUT), assuming the director is located at `192.168.1.2`.
 The output would be located at `output-directory`.
 The script `./run.sh` will be used as a workload being measured.
 ```
-./client.py -a 192.168.100.200 -o output-directory --run-workload "./run.sh"
+./client.py -a 192.168.1.2 -o output-directory --run-workload "./run.sh"
 ```
 
 See `./client.py --help` for option description.
@@ -54,14 +56,14 @@ export DATA_DIR=...
 
 cd /path/to/mlcommons/inference/vision/classification_and_detection
 
-./client.py \
+/path/to/mlcommons/power/ptd_client_server/client.py \
 	--ntp ntp.example.com \
 	--label 'ssd-mobilenet-tf-offline' \
 	--run-workload './run_local.sh tf ssd-mobilenet cpu --scenario Offline' \
 	--loadgen-logs './output/tf-cpu/ssd-mobilenet' \
 	--output './power-results/' \
 	--send-logs \
-	--addr 192.168.104.169
+	--addr 192.168.1.2
 ```
 
 Server configuration:
@@ -73,6 +75,7 @@ Server configuration:
 ntpServer: ntp.example.com
 
 # A command to run PTDaemon.
+# Please refer to the PTDaemon documentation for supported configuration keys.
 ptdCommand: D:\PTD\ptd-windows-x86.exe -p 8888 -l D:\logs_ptdeamon.txt -e -y 49 C2PH13047V
 
 # A port on that PTDaemon listens.
@@ -201,7 +204,3 @@ Additionally, [TCP keepalive] is used to detect a stale connection and don't let
 Keepalive packets are sent each 2 seconds, and we consider the connection broken after 10 missed keepalive responses.
 
 [TCP keepalive]: https://en.wikipedia.org/wiki/Keepalive#TCP_keepalive
-
-## Client-server communication sequence diagram
-
-[Rendered](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/mlcommons/power/master/ptd_client_server/doc/sequence.puml)
