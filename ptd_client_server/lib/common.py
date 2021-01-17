@@ -34,9 +34,7 @@ MAGIC_SERVER = f"mlcommons/power server v{PROTO_VERSION}"
 
 
 class Proto:
-    _EOL = b"\r\n"
     # TODO: escape/unescape binary data?
-    # TODO: b"\n" only (nc)
 
     def __init__(self, conn: socket.socket) -> None:
         self._buf = b""
@@ -56,23 +54,26 @@ class Proto:
     def recv(self) -> Optional[str]:
         if self._x is None:
             return None
-        while self._EOL not in self._buf:
+
+        done = b"\n" in self._buf
+        while not done:
             recvd = self._recv_buf(1024 * 16)
             if len(recvd) == 0:
                 self._close()
                 return None
             self._buf += recvd
+            done = b"\n" in recvd
 
-        idx = self._buf.index(self._EOL)
-        result = self._buf[:idx]
-        self._buf = self._buf[idx + len(self._EOL) :]
+        idx = self._buf.index(b"\n")
+        result = self._buf[:idx].rstrip(b"\r")
+        self._buf = self._buf[idx + len(b"\n") :]
         return result.decode(errors="replace")
 
     def send(self, data: str) -> None:
         if self._x is None:
             return
         try:
-            self._x.sendall(data.encode() + self._EOL)
+            self._x.sendall(data.encode() + b"\r\n")
         except OSError:
             logging.exception("Got an exception while sending a message to socket")
             self._close()
