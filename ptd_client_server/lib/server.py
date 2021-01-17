@@ -333,6 +333,17 @@ class Server:
 
     def handle_connection(self, p: common.Proto) -> None:
         p.enable_keepalive()
+
+        with common.sig:
+            # TODO: timeout and max msg size for recv
+            magic = p.recv()
+        p.send(common.MAGIC_SERVER)
+        if magic != common.MAGIC_CLIENT:
+            logging.error(
+                f"Handshake failed, expected {common.MAGIC_CLIENT!r}, got {magic!r}"
+            )
+            return
+
         try:
             while True:
                 with common.sig:
@@ -369,8 +380,6 @@ class Server:
         cmd = cmd.split(",")
         if len(cmd) == 0:
             return "..."
-        if cmd[0] == "hello":
-            return "Hello from server!"
         if cmd[0] == "time":
             return str(time.time())
         if cmd[0] == "new" and len(cmd) == 2:

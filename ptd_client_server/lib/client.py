@@ -142,9 +142,14 @@ def main() -> None:
     serv = common.Proto(s)
     serv.enable_keepalive()
 
-    if command(serv, "hello") != "Hello from server!":
-        logging.fatal("Not a server")
+    # TODO: timeout and max msg size for recv
+    magic = command(serv, common.MAGIC_CLIENT)
+    if magic != common.MAGIC_SERVER:
+        logging.error(
+            f"Handshake failed, expected {common.MAGIC_SERVER!r}, got {magic!r}"
+        )
         exit(1)
+    del magic
 
     common.ntp_sync(args.ntp)
 

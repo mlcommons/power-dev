@@ -28,6 +28,10 @@ import sys
 DEFAULT_PORT = 4950
 DEFAULT_IP_ADDR = "0.0.0.0"
 
+PROTO_VERSION = "1"
+MAGIC_CLIENT = f"mlcommons/power client v{PROTO_VERSION}"
+MAGIC_SERVER = f"mlcommons/power server v{PROTO_VERSION}"
+
 
 class Proto:
     _EOL = b"\r\n"

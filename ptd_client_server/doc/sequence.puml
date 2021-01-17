@@ -9,8 +9,8 @@ participant "Client\n//on SUT//" as Client
 participant "Server\n//on Director//" as Server
 participant "PTDaemon\n//on Director//" as PTDaemon
 
-Client -> Server: hello
-Client <-- Server: Hello from server!
+Client -> Server: mlcommons/power client v1
+Client <-- Server: mlcommons/power server v1
 
 rnote over Client
     NTP sync
