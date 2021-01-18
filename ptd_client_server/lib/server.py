@@ -172,6 +172,21 @@ class ServerConfig:
                 f"{filename}: ignoring unknown sections: {', '.join(unused_sections)}"
             )
 
+        # Check configurtion
+        self._check(filename)
+
+    def _check(self, filename: str) -> None:
+        if self.ptd_logfile not in self.ptd_command:
+            exit_with_error_msg(
+                f"{filename}: logfile in 'ptdCommand' is not equal 'ptdLogfile' parameter."
+            )
+
+        log_file_dir = os.path.dirname(self.ptd_logfile)
+        if not (os.path.exists(log_file_dir)):
+            exit_with_error_msg(
+                f"{filename}: {log_file_dir} does not exist. Please create {log_file_dir} folder."
+            )
+
 
 class Ptd:
     def __init__(self, command: str, port: int) -> None:
