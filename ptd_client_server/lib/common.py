@@ -23,6 +23,7 @@ import socketserver
 import string
 import subprocess
 import sys
+import time
 
 
 DEFAULT_PORT = 4950
@@ -336,11 +337,9 @@ def ntp_sync(server: Optional[str]) -> None:
 
 def mkdir_if_ne(path: str) -> None:
     """mkdir if not exists"""
-    # TODO: check permissions?
-    logging.info(f"Creating output directory {path!r}")
-
     if not os.path.exists(path):
         try:
+            logging.info(f"Creating output directory {path!r}")
             os.mkdir(path)
         except FileNotFoundError:
             logging.fatal(
@@ -348,6 +347,21 @@ def mkdir_if_ne(path: str) -> None:
                 "Make sure all intermediate directories exist."
             )
             exit(1)
+        return
+
+    test_write_permission(path)
+
+
+def test_write_permission(path: str) -> None:
+    tmp_file_path = os.path.join(path, f"{time.time_ns()}.tmp")
+
+    try:
+        with open(tmp_file_path, "w") as tmp:
+            tmp.close()
+        os.remove(tmp_file_path)
+    except Exception:
+        logging.exception("Got an exception while checking write permission")
+        exit(1)
 
 
 def human_bytes(num: int) -> str:
