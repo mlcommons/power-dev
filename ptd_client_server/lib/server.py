@@ -18,7 +18,7 @@ from __future__ import annotations
 from decimal import Decimal
 from enum import Enum
 from ipaddress import ip_address
-from typing import Optional, Dict, Tuple
+from typing import Any, Callable, Optional, Dict, Tuple, List, Set
 import argparse
 import base64
 import configparser
@@ -116,57 +116,72 @@ class ServerConfig:
         except FileNotFoundError:
             exit_with_error_msg(f"Configuration file '{filename}' does not exist.")
 
-        try:
-            serv_conf = conf["server"]
-        except KeyError:
-            exit_with_error_msg(
-                "Server section is empty in the configuration file. "
-                "Please add server section."
-            )
+        _UNSET = object()
+        used: Dict[str, Set[str]] = {}
 
-        all_options = {
-            "ntpServer",
-            "outDir",
-            "ptdCommand",
-            "ptdLogfile",
-            "ptdPort",
+        def get(
+            section: str,
+            option: str,
+            parse: Optional[Callable[[str], Any]] = None,
+            fallback: Any = _UNSET,
+        ) -> Any:
+            used.setdefault(section.lower(), set()).add(option.lower())
+            if fallback is _UNSET:
+                try:
+                    val = conf.get(section, option)
+                except configparser.Error as e:
+                    exit_with_error_msg(f"{filename}: config error: {e}")
+            else:
+                val = conf.get(section, option, fallback=fallback)
+
+            if parse is not None and isinstance(val, str):
+                try:
+                    return parse(val)
+                except Exception as e:
+                    logging.exception(
+                        f"{filename}: could not parse option {option!r} in {section!r}"
+                    )
+                    exit(1)
+            else:
+                return val
+
+        self.ntp_server: Optional[str] = get("server", "ntpServer", fallback=None)
+        self.out_dir: str = get("server", "outDir")
+        self.host: str
+        self.port: int
+        self.host, self.port = get(
+            "server",
             "listen",
-        }
+            parse=get_host_port_from_listen_string,
+            fallback=f"0.0.0.0 {common.DEFAULT_PORT}",
+        )
 
-        self.ntp_server = serv_conf.get("ntpServer")
+        ptd_device_type: int = get("ptd", "deviceType", parse=int)
+        ptd_interface_flag: str = get("ptd", "interfaceFlag")
+        # TODO: validate ptd_interface_flag?
+        # TODO: validate ptd_device_type?
+        self.ptd_logfile: str = get("ptd", "logfile")
+        self.ptd_port: int = get("ptd", "networkPort", parse=int, fallback="8888")
+        self.ptd_command: List[str] = [
+            get("ptd", "ptd"),
+            "-l",
+            self.ptd_logfile,
+            "-p",
+            str(self.ptd_port),
+            *([] if ptd_interface_flag == "" else [ptd_interface_flag]),
+            str(ptd_device_type),
+            get("ptd", "devicePort"),
+        ]
 
-        try:
-            ptd_port = serv_conf["ptdPort"]
-            self.ptd_logfile = serv_conf["ptdLogfile"]
-            self.out_dir = serv_conf["outDir"]
-            self.ptd_command = serv_conf["ptdCommand"]
-        except KeyError as e:
-            exit_with_error_msg(f"{filename}: missing option: {e.args[0]!r}")
+        for section, used_items in used.items():
+            unused_options = conf[section].keys() - set((i.lower() for i in used_items))
+            if len(unused_options) != 0:
+                logging.warning(
+                    f"{filename}: ignoring unknown options in section {section!r}: "
+                    f"{', '.join(unused_options)}"
+                )
 
-        try:
-            listen_str = serv_conf["listen"]
-            try:
-                self.host, self.port = get_host_port_from_listen_string(listen_str)
-            except ValueError as e:
-                exit_with_error_msg(f"{filename}: {e.args[0]}")
-        except KeyError:
-            self.host, self.port = (common.DEFAULT_IP_ADDR, common.DEFAULT_PORT)
-            logging.warning(
-                f"{filename}: There is no listen option. Server use {self.host}:{self.port}"
-            )
-
-        try:
-            self.ptd_port = int(ptd_port)
-        except ValueError:
-            exit_with_error_msg(f"{filename}: could not parse {ptd_port!r} as int")
-
-        unused_options = set(serv_conf.keys()) - set((i.lower() for i in all_options))
-        if len(unused_options) != 0:
-            logging.warning(
-                f"{filename}: ignoring unknown options: {', '.join(unused_options)}"
-            )
-
-        unused_sections = set(conf.sections()) - {"server"}
+        unused_sections = set(conf.sections()) - {"server", "ptd"}
         if len(unused_sections) != 0:
             logging.warning(
                 f"{filename}: ignoring unknown sections: {', '.join(unused_sections)}"
@@ -176,11 +191,6 @@ class ServerConfig:
         self._check(filename)
 
     def _check(self, filename: str) -> None:
-        if self.ptd_logfile not in self.ptd_command:
-            exit_with_error_msg(
-                f"{filename}: logfile in 'ptdCommand' is not equal 'ptdLogfile' parameter."
-            )
-
         log_file_dir = os.path.dirname(self.ptd_logfile)
         if not (os.path.exists(log_file_dir)):
             exit_with_error_msg(
@@ -189,7 +199,7 @@ class ServerConfig:
 
 
 class Ptd:
-    def __init__(self, command: str, port: int) -> None:
+    def __init__(self, command: List[str], port: int) -> None:
         self._process: Optional[subprocess.Popen[bytes]] = None
         self._socket: Optional[socket.socket] = None
         self._proto: Optional[common.Proto] = None
@@ -208,13 +218,8 @@ class Ptd:
     def _start(self) -> None:
         if self._process is not None:
             return
+        logging.info(f"Running PTDaemon: {self._command}")
         if sys.platform == "win32":
-            # shell=False:
-            #   On Windows, we don't need a shell to run a command from a single
-            #   string.  On the other hand, calling self._process.terminate()
-            #   will terminate the shell (cmd.exe), but not the an actual
-            #   command.  Thus, shell=False.
-            #
             # creationflags=subprocess.CREATE_NEW_PROCESS_GROUP:
             #   We do not want to pass ^C from the current console to the
             #   PTDaemon.  Instead, we terminate it explicitly in self.terminate().
@@ -223,7 +228,7 @@ class Ptd:
                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
             )
         else:
-            self._process = subprocess.Popen(self._command, shell=True)
+            self._process = subprocess.Popen(self._command)
 
         retries = 100
         s = None
