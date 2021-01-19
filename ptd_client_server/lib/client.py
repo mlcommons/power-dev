@@ -102,6 +102,9 @@ def main() -> None:
     parser.add_argument(
         "-f", "--force", action="store_true",
         help="force remove loadgen logs directory (INDIR)")
+    parser.add_argument(
+        "-S", "--stop-server", action="store_true",
+        help="stop the server after processing this client")
     # fmt: on
 
     parser._action_groups.append(optional)
@@ -142,9 +145,20 @@ def main() -> None:
     serv = common.Proto(s)
     serv.enable_keepalive()
 
-    if command(serv, "hello") != "Hello from server!":
-        logging.fatal("Not a server")
+    # TODO: timeout and max msg size for recv
+    magic = command(serv, common.MAGIC_CLIENT)
+    if magic != common.MAGIC_SERVER:
+        logging.error(
+            f"Handshake failed, expected {common.MAGIC_SERVER!r}, got {magic!r}"
+        )
         exit(1)
+    del magic
+
+    if args.stop_server:
+        # Enable the "stop" flag on the server so it will stop after the client
+        # disconnects.  We are sending this early to make sure the server
+        # eventually will stop even if the client crashes unexpectedly.
+        command(serv, "stop", check=True)
 
     common.ntp_sync(args.ntp)
 
