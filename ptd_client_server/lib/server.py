@@ -330,6 +330,7 @@ class Server:
         self.session: Optional[Session] = None
         self._config = config
         self._ptd = Ptd(config.ptd_command, config.ptd_port)
+        self._stop = False
 
     def handle_connection(self, p: common.Proto) -> None:
         p.enable_keepalive()
@@ -376,12 +377,20 @@ class Server:
                 logging.warning("Client connection closed unexpectedly")
                 self._drop_session()
 
+            if self._stop:
+                logging.info("Stopping the server")
+                exit(0)
+
     def _handle_cmd(self, cmd: str, p: common.Proto) -> str:
         cmd = cmd.split(",")
         if len(cmd) == 0:
             return "..."
         if cmd[0] == "time":
             return str(time.time())
+        if cmd[0] == "stop":
+            logging.info("The server will be stopped after processing this client")
+            self._stop = True
+            return "OK"
         if cmd[0] == "new" and len(cmd) == 2:
             if self.session is not None:
                 self.session.drop()

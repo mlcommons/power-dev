@@ -102,6 +102,9 @@ def main() -> None:
     parser.add_argument(
         "-f", "--force", action="store_true",
         help="force remove loadgen logs directory (INDIR)")
+    parser.add_argument(
+        "-S", "--stop-server", action="store_true",
+        help="stop the server after processing this client")
     # fmt: on
 
     parser._action_groups.append(optional)
@@ -150,6 +153,12 @@ def main() -> None:
         )
         exit(1)
     del magic
+
+    if args.stop_server:
+        # Enable the "stop" flag on the server so it will stop after the client
+        # disconnects.  We are sending this early to make sure the server
+        # eventually will stop even if the client crashes unexpectedly.
+        command(serv, "stop", check=True)
 
     common.ntp_sync(args.ntp)
 

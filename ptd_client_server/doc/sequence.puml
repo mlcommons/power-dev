@@ -12,6 +12,12 @@ participant "PTDaemon\n//on Director//" as PTDaemon
 Client -> Server: mlcommons/power client v1
 Client <-- Server: mlcommons/power server v1
 
+group Optional: --stop-server
+    Client -> Server: stop
+    Server -> Server: enable "stop" flag
+    Client <-- Server: OK
+end
+
 rnote over Client
     NTP sync
 endnote
@@ -91,5 +97,7 @@ Client -> Server: session,{id},done
 Client <-- Server: OK
 
 Client ->x Server: disconnect
+
+Server ->x Server: exit if "stop" flag enabled
 
 @enduml
