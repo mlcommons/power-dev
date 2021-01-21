@@ -156,6 +156,7 @@ class ServerConfig:
             fallback=f"0.0.0.0 {common.DEFAULT_PORT}",
         )
 
+        channel: int = get("ptd", "channel", parse=int, fallback=None)
         ptd_device_type: int = get("ptd", "deviceType", parse=int)
         ptd_interface_flag: str = get("ptd", "interfaceFlag")
         # TODO: validate ptd_interface_flag?
@@ -168,6 +169,7 @@ class ServerConfig:
             self.ptd_logfile,
             "-p",
             str(self.ptd_port),
+            *([] if channel == None else ["-c", f"{channel}"]),
             *([] if ptd_interface_flag == "" else [ptd_interface_flag]),
             str(ptd_device_type),
             get("ptd", "devicePort"),
