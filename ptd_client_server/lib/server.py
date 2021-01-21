@@ -434,6 +434,7 @@ class Server:
                 finally:
                     try:
                         os.remove(fname)
+                        logging.info(f"Removed {fname!r}")
                     except OSError:
                         pass
                 return unbool[result]
@@ -580,14 +581,10 @@ class Session:
     def upload(self, mode: Mode, fname: str) -> bool:
         if mode == Mode.RANGING and self._state == SessionState.RANGING_DONE:
             dirname = os.path.join(self._server._config.out_dir, self._id + "_ranging")
-            with zipfile.ZipFile(fname, "r") as zf:
-                zf.extractall(dirname)
-            return True
+            return self._extract(fname, dirname)
         if mode == Mode.TESTING and self._state == SessionState.TESTING_DONE:
             dirname = os.path.join(self._server._config.out_dir, self._id + "_testing")
-            with zipfile.ZipFile(fname, "r") as zf:
-                zf.extractall(dirname)
-            return True
+            return self._extract(fname, dirname)
 
         # Unexpected state
         return False
@@ -601,6 +598,19 @@ class Session:
                 self._server._ptd.stop()
         finally:
             self._state = SessionState.DONE
+
+    def _extract(self, fname: str, dirname: str) -> bool:
+        try:
+            with zipfile.ZipFile(fname, "r") as zf:
+                zf.extractall(dirname)
+            logging.info(f"Extracted {fname!r} into {dirname!r}")
+            return True
+        except Exception:
+            logging.exception(
+                f"Got an exception while extracting {fname!r} into {dirname!r}"
+            )
+
+        return False
 
 
 def main() -> None:

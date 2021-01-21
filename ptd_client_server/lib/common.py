@@ -113,6 +113,7 @@ class Proto:
                 self._close()
                 raise
         os.rename(filename + ".tmp", filename)
+        logging.info(f"Received {filename!r}")
 
     def send_file(self, filename: str) -> None:
         with open(filename, "rb") as f:
