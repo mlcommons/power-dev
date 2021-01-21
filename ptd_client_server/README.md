@@ -120,6 +120,10 @@ deviceType: 49
 # devicePort should be either the IP address or device serial number.
 #interfaceFlag: -y
 #devicePort: C2PH13047V
+
+# Channel number for multichannel analyzers operating in single channel mode.
+# Optional. (`-c ` option)
+channel: 1
 ```
 
 ## Logs
