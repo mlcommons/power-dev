@@ -126,6 +126,8 @@ deviceType: 49
 channel: 1
 ```
 
+An example of server configuration is provided in the `server.template.conf` file.
+
 ## Logs
 
 The purpose of this software is to produce two log files:

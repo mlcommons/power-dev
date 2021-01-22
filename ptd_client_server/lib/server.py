@@ -19,6 +19,7 @@ from decimal import Decimal
 from enum import Enum
 from ipaddress import ip_address
 from typing import Any, Callable, Optional, Dict, Tuple, List, Set
+from pathlib import Path
 import argparse
 import base64
 import configparser
@@ -193,10 +194,10 @@ class ServerConfig:
         self._check(filename)
 
     def _check(self, filename: str) -> None:
-        log_file_dir = os.path.dirname(self.ptd_logfile)
-        if not (os.path.exists(log_file_dir)):
+        path = Path(self.ptd_logfile)
+        if not (path.parent.exists()):
             exit_with_error_msg(
-                f"{filename}: {log_file_dir} does not exist. Please create {log_file_dir} folder."
+                f"{filename}: {str(path.parent)!r} does not exist. Please create {str(path.parent)!r} folder."
             )
 
 
@@ -535,6 +536,9 @@ class Session:
         if mode == Mode.TESTING and self._state == SessionState.TESTING_DONE:
             return True
 
+        with common.sig:
+            time.sleep(ANALYZER_SLEEP_SECONDS)
+
         # TODO: handle exceptions?
 
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
@@ -564,8 +568,6 @@ class Session:
 
         if mode == Mode.TESTING and self._state == SessionState.TESTING:
             self._state = SessionState.TESTING_DONE
-            with common.sig:
-                time.sleep(ANALYZER_SLEEP_SECONDS)
             self._server._ptd.stop()
             dirname = os.path.join(self._server._config.out_dir, self._id + "_testing")
             os.mkdir(dirname)
@@ -619,7 +621,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Server for communication with PTD")
 
     # fmt: off
-    parser.add_argument("-c", "--configurationFile", metavar="FILE", type=str, help="", default="server.conf")
+    parser.add_argument("-c", "--configurationFile", metavar="FILE", type=str, help="", required=True)
     # fmt: on
     args = parser.parse_args()
 
