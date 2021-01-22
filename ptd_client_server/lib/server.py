@@ -93,6 +93,12 @@ def exit_with_error_msg(error_msg: str) -> None:
     exit(1)
 
 
+def tcp_port_is_occupied(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.1)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
 def get_host_port_from_listen_string(listen_str: str) -> Tuple[str, int]:
     try:
         host, port = listen_str.split(" ")
@@ -200,6 +206,11 @@ class ServerConfig:
                 f"{filename}: {str(path.parent)!r} does not exist. Please create {str(path.parent)!r} folder."
             )
 
+        if tcp_port_is_occupied(self.ptd_port):
+            exit_with_error_msg(
+                f"The PTDaemon port {self.ptd_port} is already occupied."
+            )
+
 
 class Ptd:
     def __init__(self, command: List[str], port: int) -> None:
@@ -221,6 +232,8 @@ class Ptd:
     def _start(self) -> None:
         if self._process is not None:
             return
+        if tcp_port_is_occupied(self._port):
+            raise RuntimeError(f"The PTDaemon port {self._port} is already occupied")
         logging.info(f"Running PTDaemon: {self._command}")
         if sys.platform == "win32":
             # creationflags=subprocess.CREATE_NEW_PROCESS_GROUP:
