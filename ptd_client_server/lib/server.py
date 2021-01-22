@@ -249,9 +249,9 @@ class Ptd:
         retries = 100
         s = None
         while s is None and retries > 0:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             if self._process.poll() is not None:
                 raise RuntimeError("PTDaemon unexpectedly terminated")
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 s.connect(("127.0.0.1", self._port))
             except ConnectionRefusedError:
@@ -302,12 +302,11 @@ class Ptd:
                 self._process.wait()
             self._process = None
 
-    def running(self) -> bool:
-        return self._process is not None
-
     def cmd(self, cmd: str) -> Optional[str]:
         if self._proto is None:
             return None
+        if self._process is None or self._process.poll() is not None:
+            exit_with_error_msg("PTDaemon unexpectedly terminated")
         logging.info(f"Sending to ptd: {cmd!r}")
         self._proto.send(cmd)
         reply = self._proto.recv()
