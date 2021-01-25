@@ -200,13 +200,16 @@ class SignalHandler:
 
     def _handle(self, signum: int, frame: Any) -> None:
         if not self.stopped:
-            logging.info("Stopping...")
+            logging.info("Performing graceful shutdown...")
+            logging.info("Send SIGTERM (CTRL+C) again to abort")
             self.stopped = True
             self.on_stop()
             if self._enable_exception:
                 raise KeyboardInterrupt
         else:
-            logging.info("Force stopping...")
+            logging.fatal(
+                "Got SIGTERM singal twice, performing non-graceful shutdown..."
+            )
             self.force_stopped = True
             exit(1)
 
