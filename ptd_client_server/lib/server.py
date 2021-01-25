@@ -93,6 +93,12 @@ def exit_with_error_msg(error_msg: str) -> None:
     exit(1)
 
 
+def tcp_port_is_occupied(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.1)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
 def get_host_port_from_listen_string(listen_str: str) -> Tuple[str, int]:
     try:
         host, port = listen_str.split(" ")
@@ -200,6 +206,11 @@ class ServerConfig:
                 f"{filename}: {str(path.parent)!r} does not exist. Please create {str(path.parent)!r} folder."
             )
 
+        if tcp_port_is_occupied(self.ptd_port):
+            exit_with_error_msg(
+                f"The PTDaemon port {self.ptd_port} is already occupied."
+            )
+
 
 class Ptd:
     def __init__(self, command: List[str], port: int) -> None:
@@ -221,6 +232,8 @@ class Ptd:
     def _start(self) -> None:
         if self._process is not None:
             return
+        if tcp_port_is_occupied(self._port):
+            raise RuntimeError(f"The PTDaemon port {self._port} is already occupied")
         logging.info(f"Running PTDaemon: {self._command}")
         if sys.platform == "win32":
             # creationflags=subprocess.CREATE_NEW_PROCESS_GROUP:
@@ -236,9 +249,9 @@ class Ptd:
         retries = 100
         s = None
         while s is None and retries > 0:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             if self._process.poll() is not None:
                 raise RuntimeError("PTDaemon unexpectedly terminated")
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 s.connect(("127.0.0.1", self._port))
             except ConnectionRefusedError:
@@ -289,12 +302,11 @@ class Ptd:
                 self._process.wait()
             self._process = None
 
-    def running(self) -> bool:
-        return self._process is not None
-
     def cmd(self, cmd: str) -> Optional[str]:
         if self._proto is None:
             return None
+        if self._process is None or self._process.poll() is not None:
+            exit_with_error_msg("PTDaemon unexpectedly terminated")
         logging.info(f"Sending to ptd: {cmd!r}")
         self._proto.send(cmd)
         reply = self._proto.recv()

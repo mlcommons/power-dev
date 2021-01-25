@@ -14,6 +14,7 @@
 # =============================================================================
 
 import pytest
+import socket
 
 from lib import server
 
@@ -34,3 +35,14 @@ def test_parse_listen() -> None:
         "2001:db8::8a2e:370:7334",
         1234,
     )
+
+
+def test_tcp_port_is_occupied() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("127.0.0.1", 9998))
+        s.listen(10)
+
+        assert server.tcp_port_is_occupied(9997) is False
+        assert server.tcp_port_is_occupied(9998) is True
+        assert server.tcp_port_is_occupied(9999) is False
