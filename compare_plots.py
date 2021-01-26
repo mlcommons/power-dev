@@ -25,6 +25,9 @@ def get_values(path):
     try:
         with open(path, "r") as log:
             lines = log.readlines()
+            if len(lines) == 0:
+                print(f"{path} is empty", file=sys.stderr)
+                exit(2)
             for line in lines:
                 watts = watts_value_reg_exp.findall(line)[0]
                 watts_values.append(float(watts))
@@ -32,7 +35,7 @@ def get_values(path):
         print(f"{path} does not exist", file=sys.stderr)
         exit(2)
     except IndexError:
-        print("There are no watts values in {path}", file=sys.stderr)
+        print(f"There are no watts values in {path}", file=sys.stderr)
         exit(2)
     return watts_values
 
