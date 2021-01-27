@@ -631,9 +631,10 @@ def main() -> None:
     common.init("ptd-server")
 
     parser = argparse.ArgumentParser(description="Server for communication with PTD")
+    required = parser.add_argument_group("required arguments")
 
     # fmt: off
-    parser.add_argument("-c", "--configurationFile", metavar="FILE", type=str, help="", required=True)
+    required.add_argument("-c", "--configurationFile", metavar="FILE", type=str, help="", required=True)
     # fmt: on
     args = parser.parse_args()
 
