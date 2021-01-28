@@ -21,6 +21,7 @@ from ipaddress import ip_address
 from typing import Any, Callable, Optional, Dict, Tuple, List, Set
 from pathlib import Path
 import argparse
+import atexit
 import base64
 import configparser
 import datetime
@@ -222,6 +223,7 @@ class Ptd:
         self._port = port
         self._init_Amps: Optional[str] = None
         self._init_Volts: Optional[str] = None
+        atexit.register(self._force_terminate)
 
     def start(self) -> None:
         try:
@@ -302,6 +304,13 @@ class Ptd:
                 self._process.kill()
                 self._process.wait()
             self._process = None
+
+    def _force_terminate(self) -> None:
+        if self._process is not None:
+            logging.info("Force stopping ptd...")
+            self._process.kill()
+            self._process.wait()
+        self._process = None
 
     def cmd(self, cmd: str) -> Optional[str]:
         if self._proto is None:
@@ -640,9 +649,10 @@ def main() -> None:
     common.init("ptd-server")
 
     parser = argparse.ArgumentParser(description="Server for communication with PTD")
+    required = parser.add_argument_group("required arguments")
 
     # fmt: off
-    parser.add_argument("-c", "--configurationFile", metavar="FILE", type=str, help="", required=True)
+    required.add_argument("-c", "--configurationFile", metavar="FILE", type=str, help="", required=True)
     # fmt: on
     args = parser.parse_args()
 
@@ -651,6 +661,8 @@ def main() -> None:
     common.mkdir_if_ne(config.out_dir)
 
     ntp_sync_check(config.ntp_server)
+
+    common.log_sources()
 
     server = Server(config)
     try:
