@@ -34,6 +34,7 @@ import sys
 import time
 import zipfile
 
+from . import time_sync
 from . import common
 
 
@@ -153,7 +154,7 @@ class ServerConfig:
             else:
                 return val
 
-        self.ntp_server: Optional[str] = get("server", "ntpServer", fallback=None)
+        self.ntp_server: str = get("server", "ntpServer")
         self.out_dir: str = get("server", "outDir")
         self.host: str
         self.port: int
@@ -416,6 +417,9 @@ class Server:
             return "..."
         if cmd[0] == "time":
             return str(time.time())
+        if cmd[0] == "set_ntp":
+            time_sync.set_ntp(self._config.ntp_server)
+            return "OK"
         if cmd[0] == "stop":
             logging.info("The server will be stopped after processing this client")
             self._stop = True
@@ -517,9 +521,6 @@ class Session:
 
         if mode == Mode.RANGING and self._state == SessionState.INITIAL:
             self._server._ptd.start()
-
-            common.ntp_sync(self._server._config.ntp_server)
-
             self._server._ptd.cmd("SR,V,Auto")
             self._server._ptd.cmd("SR,A,Auto")
             with common.sig:
@@ -534,9 +535,6 @@ class Session:
 
         if mode == Mode.TESTING and self._state == SessionState.RANGING_DONE:
             self._server._ptd.start()
-
-            common.ntp_sync(self._server._config.ntp_server)
-
             self._server._ptd.cmd(f"SR,V,{self._maxVolts}")
             self._server._ptd.cmd(f"SR,A,{self._maxAmps}")
             with common.sig:
@@ -651,7 +649,8 @@ def main() -> None:
 
     common.mkdir_if_ne(config.out_dir)
 
-    common.ntp_sync(config.ntp_server)
+    if not time_sync.ntp_sync(config.ntp_server):
+        exit_with_error_msg("Could not synchronize with NTP")
 
     common.log_sources()
 
