@@ -23,6 +23,7 @@ import socket
 import subprocess
 import time
 import zipfile
+from . import time_sync
 
 from . import common
 
@@ -86,13 +87,13 @@ def main() -> None:
     required.add_argument(
         "-o", "--output", metavar="OUTDIR", type=str, required=True,
         help="put logs into OUTDIR (copied from INDIR)")
+    required.add_argument(
+        "-n", "--ntp", metavar="ADDR", type=str, required=True,
+        help="NTP server address")
 
     parser.add_argument(
         "-p", "--port", metavar="PORT", type=int, default=4950,
         help="server port, defaults to 4950")
-    parser.add_argument(
-        "-n", "--ntp", metavar="ADDR", type=str,
-        help="NTP server address, optional")
     parser.add_argument(
         "-l", "--label", metavar="LABEL", type=str, default="",
         help="a label to include into the resulting directory name")
@@ -160,7 +161,17 @@ def main() -> None:
         # eventually will stop even if the client crashes unexpectedly.
         command(serv, "stop", check=True)
 
-    common.ntp_sync(args.ntp)
+    def ntp_and_server_sync_check():
+        if not time_sync.ntp_host_sync(args.ntp):
+            logging.error("Could not synchronize time with NTP")
+            exit()
+        if not time_sync.remote_host_sync(
+            lambda: float(command(serv, "time")), lambda: command(serv, "resync")
+        ):
+            logging.error("Could not synchronize time with server")
+            exit()
+
+    ntp_and_server_sync_check()
 
     session = command(serv, f"new,{args.label}")
     if session is None or not session.startswith("OK "):
@@ -169,26 +180,13 @@ def main() -> None:
     session = session[len("OK ") :]
     logging.info(f"Session id is {session!r}")
 
-    client_time1 = time.time()
-    serv_time = float(command(serv, "time"))
-    client_time2 = time.time()
-    dt1 = 1000 * (client_time1 - serv_time)
-    dt2 = 1000 * (client_time2 - serv_time)
-    logging.info(f"The time difference is within range {dt1:.3}ms..{dt2:.3}ms")
-
-    if max(abs(dt1), abs(dt2)) > 1000:
-        logging.fatal(
-            "The time difference between client and server is more than 1 second"
-        )
-        exit(1)
-
     for mode in ["ranging", "testing"]:
         logging.info(f"Running workload in {mode} mode")
         out = os.path.join(args.output, f"{session}_{mode}")
 
         # os.mkdir(out)
 
-        common.ntp_sync(args.ntp)
+        ntp_and_server_sync_check()
         command(serv, f"session,{session},start,{mode}", check=True)
 
         logging.info(f"Running the workload {args.run_workload!r}")
