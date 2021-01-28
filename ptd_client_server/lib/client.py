@@ -161,12 +161,12 @@ def main() -> None:
         # eventually will stop even if the client crashes unexpectedly.
         command(serv, "stop", check=True)
 
-    def ntp_and_server_sync_check():
+    def ntp_and_server_sync_check() -> None:
         if not time_sync.ntp_host_sync(args.ntp):
             logging.error("Could not synchronize time with NTP")
             exit()
         if not time_sync.remote_host_sync(
-            lambda: float(command(serv, "time")), lambda: command(serv, "resync")
+            lambda: float(command(serv, "time")), lambda: float(command(serv, "resync"))
         ):
             logging.error("Could not synchronize time with server")
             exit()

@@ -5,7 +5,7 @@ import time
 import subprocess
 import os
 import sys
-from typing import Callable
+from typing import Callable, Optional
 
 
 class RemouteHostSyncError(Exception):
@@ -20,7 +20,7 @@ def get_ntp_time(server: str) -> float:
     try:
         ntp_client = ntplib.NTPClient()
         response = ntp_client.request(server, version=3)
-        return response.tx_time
+        return float(response.tx_time)
     except Exception:
         logging.exception(f"Can not get time from NTP server {server}")
         raise
@@ -31,7 +31,7 @@ def ntp_host_sync(server: str) -> bool:
 
 
 def remote_host_sync(
-    command: Callable[[], float], remote_recync: Callable[[], None]
+    command: Callable[[], float], remote_recync: Callable[[], Optional[float]]
 ) -> bool:
     try:
         if not validate_remote_time(command):

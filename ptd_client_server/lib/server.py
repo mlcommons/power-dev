@@ -419,7 +419,7 @@ class Server:
             return str(time.time())
         if cmd[0] == "resync":
             ntp_sync_check(self._config.ntp_server)
-            return "OK"
+            return str(time.time())
         if cmd[0] == "stop":
             logging.info("The server will be stopped after processing this client")
             self._stop = True
