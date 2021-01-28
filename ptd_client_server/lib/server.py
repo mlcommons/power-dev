@@ -653,6 +653,8 @@ def main() -> None:
 
     common.ntp_sync(config.ntp_server)
 
+    common.log_sources()
+
     server = Server(config)
     try:
         common.run_server(

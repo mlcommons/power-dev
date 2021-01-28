@@ -14,6 +14,7 @@
 # =============================================================================
 
 from typing import Any, Callable, Optional
+import json
 import logging
 import os
 import select
@@ -24,6 +25,8 @@ import string
 import subprocess
 import sys
 import time
+
+from . import source_hashes
 
 
 DEFAULT_PORT = 4950
@@ -380,3 +383,7 @@ def human_bytes(num: int) -> str:
             num /= 1000
 
     return f"{num:.1f} {unit}"
+
+
+def log_sources() -> None:
+    logging.info("Sources: " + json.dumps(source_hashes.get()))
