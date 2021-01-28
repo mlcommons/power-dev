@@ -182,6 +182,8 @@ def main() -> None:
         )
         exit(1)
 
+    common.log_sources()
+
     for mode in ["ranging", "testing"]:
         logging.info(f"Running workload in {mode} mode")
         out = os.path.join(args.output, f"{session}_{mode}")

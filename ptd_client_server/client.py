@@ -14,7 +14,9 @@
 # limitations under the License.
 # =============================================================================
 
-from lib import client
+from lib import client, source_hashes
+
+source_hashes.init()
 
 if __name__ == "__main__":
     client.main()
