@@ -26,11 +26,11 @@ ci_flake8() {
 }
 
 ci_black() {
-	black --check --diff .
+	black --check --diff --exclude lib/external .
 }
 
 ci_mypy() {
-	find . -name "*.py" | xargs mypy --allow-redefinition --strict --pretty
+	mypy --allow-redefinition --strict --pretty --no-warn-unused-ignores .
 }
 
 ci_pytest() {

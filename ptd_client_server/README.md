@@ -215,7 +215,9 @@ Both the client and the server have an option to configure the NTP server addres
 
 Prerequisites:
 1. Install `ntpdate` binary. Ubuntu package: `ntpdate`.
-2. Disable pre-existing `ntp` daemon if it is running. On Ubuntu: `systemctl disable ntp; systemctl stop ntp`.
+2. Disable pre-existing `ntp` and `systemd-timesyncd` daemons if they are running.
+   On Ubuntu: `systemctl disable systemd-timesyncd; systemctl stop systemd-timesyncd`,
+              `systemctl disable ntp; systemctl stop ntp`.
 3. Root priveleges are required. Either run the script as root, or set up a passwordless `sudo`.
 
 The script will synchronize time using `ntpdate` binary.
@@ -223,8 +225,7 @@ The script will synchronize time using `ntpdate` binary.
 ### Windows
 Prerequisites:
 1. Run the script as an administrator.
-
-The script would enable and configure `w32time` service automatically.
+2. Install `pywin32`: `python -m pip install pywin32`.
 
 ## Unexpected test termination
 
