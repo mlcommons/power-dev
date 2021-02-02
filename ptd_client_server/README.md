@@ -2,10 +2,6 @@
 
 This client-server application is intended to measure the power consumed during the execution of the specified workload.
 
-The purpose of this software is to produce two log files:
-* A loadgen log is generated on the SUT by running an inference benchmark.
-* A power log is generated on the server by PTDaemon.
-
 The server is intended to be run on the director (the machine on which PTDaemon runs),
 and the client is intended to be run on the SUT (system under test).
 
@@ -21,12 +17,40 @@ Client-server sequence diagram: [sequence.png](./doc/sequence.png)
 * Python 3.7 or newer
 * Supported OS: Windows or Linux
 * PTDaemon (on the server)
-* On Linux: `ntpdate`, optional.
+* On Linux: `ntpdate`, optional (see below).
+* On Windows: install `pywin32` python dependency (see below).
 * Assuming you are able to run the required [inference] submission.
   In the README we use [ssd-mobilenet] as an example.
 
 [inference]: https://github.com/mlcommons/inference
 [ssd-mobilenet]: https://github.com/mlcommons/inference/tree/master/vision/classification_and_detection
+
+### NTP
+
+To make sure the Loadgen logs and PTDaemon logs match, the system time should be synchronized on the client and the server.
+Both the client and the server have an option to configure the NTP server address to sync with before running a workload.
+
+There are two options:
+
+1. Sync the system time by yourself.
+  You still need to specify NTP server both for the client and the server for the verification.
+
+2. Let the script sync the system time.
+  Runs automatically if the verification fails.
+
+For the second option, you need to have the following prerequisites.
+
+#### On Linux
+
+1. Install `ntpdate` binary. Ubuntu package: `ntpdate`.
+2. Disable pre-existing NTP daemons if they are running.
+   On Ubuntu: `systemctl disable systemd-timesyncd; systemctl stop systemd-timesyncd; systemctl disable ntp; systemctl stop ntp`.
+3. Root privileges are required. Either run the script as root or set up a passwordless `sudo`.
+
+#### On Windows
+1. Install `pywin32`: `python -m pip install pywin32`.
+2. Disable default Windows Time Service (`w32tm`).
+3. Run the script as an administrator.
 
 ## Installation
 
@@ -34,26 +58,16 @@ Client-server sequence diagram: [sequence.png](./doc/sequence.png)
 
 ## Configuration
 
-Server required argument:
-
-* `-c FILE` `--configurationFile FILE`
-
-  A server configuration file.
-
-Server optional argument:
-
-* `-h` `--help`
-  
-  Show help message and exit.
-
-An example of server configuration is provided in the `server.template.conf` file.
-
-Server configuration:
+The server requires the configuration file to be passed using the `-c` command line argument.
+A template of this file is provided below and in the [`server.template.conf`](./server.template.conf) file.
 
 ```ini
+# Server Configuration Template
+# To use change the section of the config that you'd like to change.
+
 [server]
-# (Optional) NTP server to sync with before each measurement.
-# See "NTP Setup" section in the README.md.
+# NTP server to sync with before each measurement.
+# See "NTP" section in the README.md.
 #ntpServer: ntp.example.com
 
 # A directory to store output data. A relative or absolute path could be used.
@@ -107,245 +121,209 @@ devicePort: COM1
 #interfaceFlag: -y
 #devicePort: C2PH13047V
 
-# (Optional) Channel number for multichannel analyzers operating in single channel mode.(`-c ` option)
+# (Optional) Channel number for multichannel analyzers operating in single channel mode. (`-c` option)
 #channel: 1
 ```
-Client configuration arguments.
 
-Required arguments:
+Client command line arguments:
 
-  * `-a ADDR`, `--addr ADDR` 
+```
+usage: client.py [-h] -a ADDR -w CMD -L INDIR -o OUTDIR -n ADDR [-p PORT] [-l LABEL] [-s] [-f] [-S]
 
-    A server address.
+PTD client
 
-  * `-w CMD`, `--run-workload CMD`
+required arguments:
+  -a ADDR, --addr ADDR            server address
+  -w CMD, --run-workload CMD      a shell command to run under power measurement
+  -L INDIR, --loadgen-logs INDIR  collect loadgen logs from INDIR
+  -o OUTDIR, --output OUTDIR      put logs into OUTDIR (copied from INDIR)
+  -n ADDR, --ntp ADDR             NTP server address
 
-    A shell command to run under power measurement
+optional arguments:
+  -h, --help                      show this help message and exit
+  -p PORT, --port PORT            server port, defaults to 4950
+  -l LABEL, --label LABEL         a label to include into the resulting directory name
+  -s, --send-logs                 send loadgen logs to the server
+  -f, --force                     force remove loadgen logs directory (INDIR)
+  -S, --stop-server               stop the server after processing this client
+```
 
-  * `-L INDIR`, `--loadgen-logs INDIR`
+* `INDIR` is a directory to get loadgen logs from.
+  The workload command should place inside this directory.
 
-    A directory to get loadgen logs from.
-    The workload command should place inside this directory.
+* `LABEL` is a human-readable label.
+  The label is used later both on the client and the server to distinguish between log directories.
 
-  * `-o OUTDIR`, `--output OUTDIR`
+* If `-s`/`--send-logs` is enabled, then the loadgen log will be sent to the server and stored alongside the power log.
 
-    An output directory to put loadgen logs.
-   
-Optional arguments:
+## Usage Example
 
-  * `-h`, `--help`
-
-    Show help message and exit.
-
-  * `-p PORT`, `--port PORT`
-
-    A server port, defaults to 4950.
-
-  * `-n ADDR`, `--ntp ADDR`
-
-     NTP server address, optional
-
-  * `-l "mylabel"`, `--label "mylabel"`
-
-    A human-readable label. Empty string by default.
-    The label is used later at the server to distinguish between log directories.
-
-  * `-s`, `--send-logs`
-
-    If enabled, then the loadgen log will be sent to the server and stored alongside the power log.
-
-  * `-f`, `--force`
-
-    Force remove loadgen logs directory from INDIR.
-
-  * `-S`, `--stop-server`
-
-    Stop the server after processing this client.
-
-## Usage example: dummy.sh
+In these examples we have the following assumptions:
+* The director IP address is 192.168.1.2.
+* The current repository is cloned to `/path/to/mlcommons/power`.
+* Using `ntp.example.com` as an NTP server.
 
 Start a server (on a director):
-```
+```sh
 ./server.py -c server-config.conf
 ```
-Create script `dummy.sh` in `ptd_client_server` directory (on a SUT):
-```
-#!/bin/bash
-#dummy.sh example
+
+Then on the SUT, provide a workload script for your particular workload and run it using `client.py`.
+Choose an option below for the example of workload script.
+
+<details><summary>Example option 1: a dummy workload</summary>
+
+Create a dummy workload script named `dummy.sh`.
+It does nothing but mimicking the real loadgen by creating empty loadgen log files in the `dummy-loadgen-logs` directory.
+
+```sh
+#!/usr/bin/env bash
 
 sleep 5
-if [ ! -e logs ]; then mkdir logs; fi;
+mkdir -p dummy-loadgen-logs
 
-# Create empty files with the same names as loadgen
+# Create empty files with the same names as loadgen do
 
-touch logs/mlperf_log_accuracy.json
-touch logs/mlperf_log_detail.txt
-touch logs/mlperf_log_summary.txt
-touch logs/mlperf_log_trace.json
+touch dummy-loadgen-logs/mlperf_log_accuracy.json
+touch dummy-loadgen-logs/mlperf_log_detail.txt
+touch dummy-loadgen-logs/mlperf_log_summary.txt
+touch dummy-loadgen-logs/mlperf_log_trace.json
 ```
-```
-chmod 775 dummy.sh
-```
-Then start a client (on the SUT), assuming the director ip address is `192.168.1.2`.
-The output would be located at `client-output-directory`.
-The script `./dummy.sh` will be used as a workload being measured.
-```
-./client.py -a 192.168.1.2 -o client-output-directory -w "./dummy.sh" -L loadgen-logs -l "example" -s -n fi.pool.ntp.org
-```
-### Result
+Don't forget to `chmod +x dummy.sh`.
 
-After a successful run, you'll see these new files and directories on the server:
-```
-D:\ptd-logs
-├── … (old entries skipped)
-├── 2020-12-28_15-20-52_exmple_ranging
-│   ├── spl.txt                           ← power log
-│   ├── mlperf_log_accuracy.json        ┐
-│   ├── mlperf_log_detail.txt           │ ← loadgen log (if --send-logs is used)
-│   ├── mlperf_log_summary.txt          │
-│   └── mlperf_log_trace.json           ┘
-└── 2020-12-28_15-20-52_example_testing
-    ├── spl.txt                           ← power log
-    ├── mlperf_log_accuracy.json        ┐
-    ├── mlperf_log_detail.txt           │ ← loadgen log (if --send-logs is used)
-    ├── mlperf_log_summary.txt          │
-    └── mlperf_log_trace.json           ┘
-```
-And these on the client:
-```
-client-output-directory
-├── … (old entries skipped)
-├── 2020-12-28_15-20-52_example_ranging
-│   ├── mlperf_log_accuracy.json
-│   ├── mlperf_log_detail.txt
-│   ├── mlperf_log_summary.txt
-│   └── mlperf_log_trace.json
-└── 2020-12-28_15-20-52_example_testing
-    ├── mlperf_log_accuracy.json
-    ├── mlperf_log_detail.txt
-    ├── mlperf_log_summary.txt
-    └── mlperf_log_trace.json
+Then start a client using `./dummy.sh` as a workload being measured.
+Pass `dummy-loadgen-logs` as a location of loadgen logs.
+
+```sh
+/path/to/mlcommons/power/ptd_client_server/client.py \
+    --addr 192.168.1.2 \
+    --output "client-output-directory" \
+    --run-workload "./dummy.sh"
+    --loadgen-logs "dummy-loadgen-logs" \
+    --label "mylabel" \
+    --send-logs \
+    --ntp ntp.example.com
 ```
 
-spl.txt consists of the following lines:
-```
-Time,28-12-2020 15:20:14.682,Watts,22.950000,Volts,228.570000,Amps,0.206430,PF,0.486400,Mark,2021-01-27_20-40-33_example_testing
-Time,28-12-2020 15:20:15.686,Watts,23.080000,Volts,228.440000,Amps,0.207320,PF,0.487400,Mark,2021-01-27_20-40-33_example_testing
-Time,28-12-2020 15:20:16.691,Watts,22.990000,Volts,228.520000,Amps,0.206740,PF,0.486500,Mark,2021-01-27_20-40-33_example_testing
-```
+</details>
 
-## Usage example: loadgen
+<details><summary>Example option 2: loadgen benchmark</summary>
 
-Start a server (on a director):
-```
-./server.py -c server-config.conf
-```
-There are steps on a SUT:
+Source: https://github.com/mlcommons/inference/tree/master/loadgen/benchmark
 
-Clone [inference] into home directory.
-Change directory to `~/inference-master/loadgen/benchmark`
-```
-cd ~/inference-master/loadgen/benchmark
-```
-Create `run_build.sh`.
-```
-#!/usr/bin/bash
-#run_build.sh example
+Use the following script to build loadgen benchmark:
+```sh
+#!/usr/bin/env bash
 
 echo "Building loadgen..."
 if [ ! -e loadgen_build ]; then mkdir loadgen_build; fi;
 cd loadgen_build && cmake ../.. && make -j && cd ..
 echo "Building test program..."
 if [ ! -e build ]; then mkdir build; fi;
-g++ --std=c++11 -O3 -I.. -o build/repro.exe repro.cpp -Lloadgen_build -lmlperf_loadgen -lpthread
+g++ --std=c++11 -O3 -I.. -o repro.exe repro.cpp -Lloadgen_build -lmlperf_loadgen -lpthread
 ```
-```
-chmod 775 run_build.sh
-```
-Run `./run_build.sh` and then move `build/repro.exe` into a parent directory.
-```
-mv build/repro.exe ./
-```
-Create run_test.sh.
-```
-#!/usr/bin/bash
-#run_test.sh example
+Don't forget to `chmod +x dummy.sh`.
 
-cd /home/user/inference-master/loadgen/benchmark
+Create `run_workload.sh`:
+```sh
+#!/usr/bin/env bash
+
 if [ ! -e build ]; then mkdir build; fi;
-LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2 ./repro.exe 800000 0 4 2048
+./repro.exe 800000 0 4 2048
 ```
+
+Then start a client using `./run_workload.sh` as a workload being measured.
+The benchmark is hardcoded to put its logs into the `build` directory, so we specify it as a loadgen log location.
+Run it from the same directory (`loadgen/benchmark`).
+
+```sh
+/path/to/mlcommons/power/ptd_client_server/client.py \
+    --addr 192.168.1.2 \
+    --output "client-output-directory" \
+    --run-workload "./run_workload.sh" \
+    --loadgen-logs "build" \
+    --label "mylabel" \
+    --send-logs \
+    --ntp ntp.example.com
 ```
-chmod 775 run_test.sh
+
+</details>
+
+<details><summary>Example option 3: ssd-mobilenet</summary>
+
+Source: https://github.com/mlcommons/inference/tree/master/vision/classification_and_detection
+
+First, follow the instructions in the link above to build and run the `ssd-mobilenet` inference benchmark.
+You'll also need to download the corresponding model and datasets.
+
+Then, use the following script to run the benchmark under the power measurement.
+It uses `./run_local.sh` as the workload script.
+The workload script stores its output in the directory `./output/tf-cpu/ssd-mobilenet`.
+
+```sh
+#!/usr/bin/env bash
+
+# Don't forget to update the following paths
+export MODEL_DIR=/path/to/model/dir
+export DATA_DIR=/path/to/data/dir
+cd /path/to/mlcommons/inference/vision/classification_and_detection
+
+/path/to/mlcommons/power/ptd_client_server/client.py \
+	--addr 192.168.1.2 \
+	--output "client-output-directory" \
+	--run-workload "./run_local.sh tf ssd-mobilenet cpu --scenario Offline" \
+	--loadgen-logs "./output/tf-cpu/ssd-mobilenet" \
+	--label "mylabel" \
+	--send-logs \
+	--ntp ntp.example.com
 ```
-Then go to `ptd_client_server` directory and start the client, assuming the director ip address is `192.168.1.2`.
-The output would be located at `client-output-directory`.
-The script `~/inference-master/loadgen/benchmark/build/run_test.sh` will be used as a workload being measured.
-```
-./client.py -a 192.168.1.2 -o client-output-directory \
-    -w "/home/user/inference-master/loadgen/benchmark/run_test.sh" \
-    -L "/home/user/inference-master/loadgen/benchmark/build" \
-    -l "loadgen_example" -s -f -n fi.pool.ntp.org
-```
-### Result
+
+</details>
+
+All the options above store their output in the `client-output-directory` directory, but you can specify any other directory.
 
 After a successful run, you'll see these new files and directories on the server:
+
 ```
 D:\ptd-logs
 ├── … (old entries skipped)
-├── 2020-12-29_15-20-52_loadgen_example_ranging
+├── 2020-12-28_15-20-52_mylabel_ranging
 │   ├── spl.txt                           ← power log
 │   ├── mlperf_log_accuracy.json        ┐
 │   ├── mlperf_log_detail.txt           │ ← loadgen log (if --send-logs is used)
 │   ├── mlperf_log_summary.txt          │
 │   └── mlperf_log_trace.json           ┘
-└── 2020-12-29_15-20-52_loadgen_example_testing
+└── 2020-12-28_15-20-52_mylabel_testing
     ├── spl.txt                           ← power log
     ├── mlperf_log_accuracy.json        ┐
     ├── mlperf_log_detail.txt           │ ← loadgen log (if --send-logs is used)
     ├── mlperf_log_summary.txt          │
     └── mlperf_log_trace.json           ┘
 ```
-And these on the client:
+
+And these on the SUT:
+
 ```
-client-output-directory
-├── 2020-12-29_15-20-52_loadgen_example_ranging
+./client-output-directory
+├── … (old entries skipped)
+├── 2020-12-28_15-20-52_mylabel_ranging
 │   ├── mlperf_log_accuracy.json
 │   ├── mlperf_log_detail.txt
 │   ├── mlperf_log_summary.txt
 │   └── mlperf_log_trace.json
-└── 2020-12-29_15-20-52_loadgen_example_testing
+└── 2020-12-28_15-20-52_mylabel_testing
     ├── mlperf_log_accuracy.json
     ├── mlperf_log_detail.txt
     ├── mlperf_log_summary.txt
     └── mlperf_log_trace.json
 ```
-spl.txt consists of the following lines:
+
+`spl.txt` consists of the following lines:
 ```
-Time,29-12-2020 15:20:11.575,Watts,41.960000,Volts,230.860000,Amps,0.321990,PF,0.564500,Mark,2021-02-02_00-01-37_loadgen_example_testing
-Time,29-12-2020 15:20:12.571,Watts,39.700000,Volts,230.870000,Amps,0.306990,PF,0.560100,Mark,2021-02-02_00-01-37_loadgen_example_testing
-Time,29-12-2020 15:20:13.574,Watts,44.010000,Volts,230.870000,Amps,0.334470,PF,0.570000,Mark,2021-02-02_00-01-37_loadgen_example_testing
+Time,28-12-2020 15:21:14.682,Watts,22.950000,Volts,228.570000,Amps,0.206430,PF,0.486400,Mark,2020-12-28_15-20-52_mylabel_testing
+Time,28-12-2020 15:21:15.686,Watts,23.080000,Volts,228.440000,Amps,0.207320,PF,0.487400,Mark,2020-12-28_15-20-52_mylabel_testing
+Time,28-12-2020 15:21:16.691,Watts,22.990000,Volts,228.520000,Amps,0.206740,PF,0.486500,Mark,2020-12-28_15-20-52_mylabel_testing
 ```
-## NTP Setup
-
-To make sure the Loadgen logs and PTDaemon logs match, the system time should be synchronized on the client and the server.
-Both the client and the server have an option to configure the NTP server address to sync with before running a workload.
-
-### Linux
-
-Prerequisites:
-1. Install `ntpdate` binary. Ubuntu package: `ntpdate`.
-2. Disable pre-existing `ntp` and `systemd-timesyncd` daemons if they are running.
-   On Ubuntu: `systemctl disable systemd-timesyncd; systemctl stop systemd-timesyncd`,
-              `systemctl disable ntp; systemctl stop ntp`.
-3. Root priveleges are required. Either run the script as root, or set up a passwordless `sudo`.
-
-The script will synchronize time using `ntpdate` binary.
-
-### Windows
-Prerequisites:
-1. Run the script as an administrator.
-2. Install `pywin32`: `python -m pip install pywin32`.
 
 ## Unexpected test termination
 
