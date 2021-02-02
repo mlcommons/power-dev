@@ -215,7 +215,7 @@ class ServerConfig:
 
 
 class Ptd:
-    def __init__(self, command: List[str], port: int, logfile_path: str) -> None:
+    def __init__(self, command: List[str], port: int, log_dir_path: str) -> None:
         self._process: Optional[subprocess.Popen[Any]] = None
         self._socket: Optional[socket.socket] = None
         self._proto: Optional[common.Proto] = None
@@ -223,8 +223,7 @@ class Ptd:
         self._port = port
         self._init_Amps: Optional[str] = None
         self._init_Volts: Optional[str] = None
-        self._log_file_path: str = logfile_path
-        self._log_file_fd: Optional[TextIO] = None
+        self._log_file_path: str = os.path.join(log_dir_path, "ptd_logs")
         atexit.register(self._force_terminate)
 
     def start(self) -> None:
@@ -254,14 +253,12 @@ class Ptd:
                 stderr=subprocess.STDOUT,
             )
         else:
-            self._process = (
-                subprocess.Popen(
-                    self._command,
-                    bufsize=1,
-                    universal_newlines=True,
-                    stdout=open(self._log_file_path, "w"),
-                    stderr=subprocess.STDOUT,
-                ),
+            self._process = subprocess.Popen(
+                self._command,
+                bufsize=1,
+                universal_newlines=True,
+                stdout=open(self._log_file_path, "w"),
+                stderr=subprocess.STDOUT,
             )
 
         retries = 100
@@ -319,7 +316,6 @@ class Ptd:
                 self._process.kill()
                 self._process.wait()
             self._process = None
-
 
     def _force_terminate(self) -> None:
         if self._process is not None:
@@ -518,10 +514,12 @@ class Session:
         self._server: Server = server
         self._go_command_time: Optional[float] = None
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        id = timestamp + "_" + label if label != "" else timestamp
-        log_path = os.path.join(server._config.out_dir, id)
-        self._id: str = id
-        self._ptd = Ptd(server._config.ptd_command, server._config.ptd_port, log_path)
+        self._id = timestamp + "_" + label if label != "" else timestamp
+        self.log_dir_path = os.path.join(self._server._config.out_dir, self._id)
+        os.mkdir(self.log_dir_path)
+        self._ptd = Ptd(
+            server._config.ptd_command, server._config.ptd_port, self.log_dir_path
+        )
 
         # State
         self._state = SessionState.INITIAL
@@ -580,7 +578,7 @@ class Session:
             self._ptd.stop()
             assert self._go_command_time is not None
             test_duration = time.monotonic() - self._go_command_time
-            dirname = os.path.join(self._server._config.out_dir, self._id + "_ranging")
+            dirname = os.path.join(self.log_dir_path, "ranging")
             os.mkdir(dirname)
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
                 f.write(
@@ -603,7 +601,7 @@ class Session:
         if mode == Mode.TESTING and self._state == SessionState.TESTING:
             self._state = SessionState.TESTING_DONE
             self._ptd.stop()
-            dirname = os.path.join(self._server._config.out_dir, self._id + "_testing")
+            dirname = os.path.join(self.log_dir_path, "testing")
             os.mkdir(dirname)
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
                 f.write(
@@ -616,10 +614,10 @@ class Session:
 
     def upload(self, mode: Mode, fname: str) -> bool:
         if mode == Mode.RANGING and self._state == SessionState.RANGING_DONE:
-            dirname = os.path.join(self._server._config.out_dir, self._id + "_ranging")
+            dirname = os.path.join(self.log_dir_path, "ranging")
             return self._extract(fname, dirname)
         if mode == Mode.TESTING and self._state == SessionState.TESTING_DONE:
-            dirname = os.path.join(self._server._config.out_dir, self._id + "_testing")
+            dirname = os.path.join(self.log_dir_path, "testing")
             return self._extract(fname, dirname)
 
         # Unexpected state
