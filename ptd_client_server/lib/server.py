@@ -19,6 +19,7 @@ from decimal import Decimal
 from enum import Enum
 from ipaddress import ip_address
 from typing import Any, Callable, Optional, Dict, Tuple, List, Set, TextIO
+import threading
 from pathlib import Path
 import argparse
 import atexit
@@ -223,8 +224,9 @@ class Ptd:
         self._port = port
         self._init_Amps: Optional[str] = None
         self._init_Volts: Optional[str] = None
-        self._log_file_path: str = os.path.join(log_dir_path, "ptd_logs")
         atexit.register(self._force_terminate)
+        self._tee: Optional[Tee] = None
+        self._log_dir_path = log_dir_path
 
     def start(self) -> None:
         try:
@@ -240,6 +242,7 @@ class Ptd:
             raise RuntimeError(f"The PTDaemon port {self._port} is already occupied")
         logging.info(f"Running PTDaemon: {self._command}")
 
+        self._tee = Tee(os.path.join(self._log_dir_path, "ptd_logs.txt"))
         if sys.platform == "win32":
             # creationflags=subprocess.CREATE_NEW_PROCESS_GROUP:
             #   We do not want to pass ^C from the current console to the
@@ -249,7 +252,7 @@ class Ptd:
                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
                 bufsize=1,
                 universal_newlines=True,
-                stdout=open(self._log_file_path, "w"),
+                stdout=self._tee.w,
                 stderr=subprocess.STDOUT,
             )
         else:
@@ -257,9 +260,10 @@ class Ptd:
                 self._command,
                 bufsize=1,
                 universal_newlines=True,
-                stdout=open(self._log_file_path, "w"),
+                stdout=self._tee.w,
                 stderr=subprocess.STDOUT,
             )
+        self._tee.started()
 
         retries = 100
         s = None
@@ -317,12 +321,20 @@ class Ptd:
                 self._process.wait()
             self._process = None
 
+        if self._tee is not None:
+            self._tee.done()
+            self._tee = None
+
     def _force_terminate(self) -> None:
         if self._process is not None:
             logging.info("Force stopping ptd...")
             self._process.kill()
             self._process.wait()
         self._process = None
+
+        if self._tee is not None:
+            self._tee.done()
+            self._tee = None
 
     def cmd(self, cmd: str) -> Optional[str]:
         if self._proto is None:
@@ -509,12 +521,49 @@ class Mode(Enum):
     TESTING = 1
 
 
+class Tee:
+    def __init__(self, fname: str) -> None:
+        self._closed = False
+        self._r, self.w = os.pipe()
+        self._f = open(fname, "w")
+        self._thread = threading.Thread(target=self._run)
+        self._thread.daemon = True
+        self._thread.start()
+
+    def started(self) -> None:
+        """Should be called passing self.w to Popen()"""
+        if not self._closed:
+            os.close(self.w)
+            self._closed = True
+
+    def done(self) -> None:
+        """Should be called after Popen.wait()"""
+        if not self._closed:
+            os.close(self.w)
+            self._closed = True
+        self._thread.join()
+
+    def _run(self) -> None:
+        try:
+            while True:
+                rd = os.read(self._r, 1024)
+                if len(rd) == 0:
+                    break
+                rd_str = rd.decode(errors="ignore")
+                sys.stderr.write(rd_str)
+                sys.stderr.flush()
+                self._f.write(rd_str)
+        finally:
+            self._f.close()
+            os.close(self._r)
+
+
 class Session:
     def __init__(self, server: Server, label: str) -> None:
         self._server: Server = server
         self._go_command_time: Optional[float] = None
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self._id = timestamp + "_" + label if label != "" else timestamp
+        self._id: str = timestamp + "_" + label if label != "" else timestamp
         self.log_dir_path = os.path.join(self._server._config.out_dir, self._id)
         os.mkdir(self.log_dir_path)
         self._ptd = Ptd(
