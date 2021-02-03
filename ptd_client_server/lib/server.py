@@ -18,7 +18,8 @@ from __future__ import annotations
 from decimal import Decimal
 from enum import Enum
 from ipaddress import ip_address
-from typing import Any, Callable, Optional, Dict, Tuple, List, Set
+from typing import Any, Callable, Optional, Dict, Tuple, List, Set, TextIO
+import threading
 from pathlib import Path
 import argparse
 import atexit
@@ -215,8 +216,8 @@ class ServerConfig:
 
 
 class Ptd:
-    def __init__(self, command: List[str], port: int) -> None:
-        self._process: Optional[subprocess.Popen[bytes]] = None
+    def __init__(self, command: List[str], port: int, log_dir_path: str) -> None:
+        self._process: Optional[subprocess.Popen[Any]] = None
         self._socket: Optional[socket.socket] = None
         self._proto: Optional[common.Proto] = None
         self._command = command
@@ -224,6 +225,8 @@ class Ptd:
         self._init_Amps: Optional[str] = None
         self._init_Volts: Optional[str] = None
         atexit.register(self._force_terminate)
+        self._tee: Optional[Tee] = None
+        self._log_dir_path = log_dir_path
 
     def start(self) -> None:
         try:
@@ -238,6 +241,8 @@ class Ptd:
         if tcp_port_is_occupied(self._port):
             raise RuntimeError(f"The PTDaemon port {self._port} is already occupied")
         logging.info(f"Running PTDaemon: {self._command}")
+
+        self._tee = Tee(os.path.join(self._log_dir_path, "ptd_logs.txt"))
         if sys.platform == "win32":
             # creationflags=subprocess.CREATE_NEW_PROCESS_GROUP:
             #   We do not want to pass ^C from the current console to the
@@ -245,14 +250,25 @@ class Ptd:
             self._process = subprocess.Popen(
                 self._command,
                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                bufsize=1,
+                universal_newlines=True,
+                stdout=self._tee.w,
+                stderr=subprocess.STDOUT,
             )
         else:
-            self._process = subprocess.Popen(self._command)
+            self._process = subprocess.Popen(
+                self._command,
+                bufsize=1,
+                universal_newlines=True,
+                stdout=self._tee.w,
+                stderr=subprocess.STDOUT,
+            )
+        self._tee.started()
 
         retries = 100
         s = None
         while s is None and retries > 0:
-            if self._process.poll() is not None:
+            if self._process is not None and self._process.poll() is not None:
                 raise RuntimeError("PTDaemon unexpectedly terminated")
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
@@ -305,12 +321,20 @@ class Ptd:
                 self._process.wait()
             self._process = None
 
+        if self._tee is not None:
+            self._tee.done()
+            self._tee = None
+
     def _force_terminate(self) -> None:
         if self._process is not None:
             logging.info("Force stopping ptd...")
             self._process.kill()
             self._process.wait()
         self._process = None
+
+        if self._tee is not None:
+            self._tee.done()
+            self._tee = None
 
     def cmd(self, cmd: str) -> Optional[str]:
         if self._proto is None:
@@ -359,7 +383,6 @@ class Server:
     def __init__(self, config: ServerConfig) -> None:
         self.session: Optional[Session] = None
         self._config = config
-        self._ptd = Ptd(config.ptd_command, config.ptd_port)
         self._stop = False
 
     def handle_connection(self, p: common.Proto) -> None:
@@ -481,10 +504,7 @@ class Server:
                 self.session = None
 
     def close(self) -> None:
-        try:
-            self._drop_session()
-        finally:
-            self._ptd.terminate()
+        self._drop_session()
 
 
 class SessionState(Enum):
@@ -501,12 +521,54 @@ class Mode(Enum):
     TESTING = 1
 
 
+class Tee:
+    def __init__(self, fname: str) -> None:
+        self._closed = False
+        self._r, self.w = os.pipe()
+        self._f = open(fname, "w")
+        self._thread = threading.Thread(target=self._run)
+        self._thread.daemon = True
+        self._thread.start()
+
+    def started(self) -> None:
+        """Should be called passing self.w to Popen()"""
+        if not self._closed:
+            os.close(self.w)
+            self._closed = True
+
+    def done(self) -> None:
+        """Should be called after Popen.wait()"""
+        if not self._closed:
+            os.close(self.w)
+            self._closed = True
+        self._thread.join()
+
+    def _run(self) -> None:
+        try:
+            while True:
+                rd = os.read(self._r, 1024)
+                if len(rd) == 0:
+                    break
+                rd_str = rd.decode(errors="ignore")
+                sys.stderr.write(rd_str)
+                sys.stderr.flush()
+                self._f.write(rd_str)
+        finally:
+            self._f.close()
+            os.close(self._r)
+
+
 class Session:
     def __init__(self, server: Server, label: str) -> None:
         self._server: Server = server
         self._go_command_time: Optional[float] = None
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         self._id: str = timestamp + "_" + label if label != "" else timestamp
+        self.log_dir_path = os.path.join(self._server._config.out_dir, self._id)
+        os.mkdir(self.log_dir_path)
+        self._ptd = Ptd(
+            server._config.ptd_command, server._config.ptd_port, self.log_dir_path
+        )
 
         # State
         self._state = SessionState.INITIAL
@@ -520,13 +582,13 @@ class Session:
             return True
 
         if mode == Mode.RANGING and self._state == SessionState.INITIAL:
-            self._server._ptd.start()
-            self._server._ptd.cmd("SR,V,Auto")
-            self._server._ptd.cmd("SR,A,Auto")
+            self._ptd.start()
+            self._ptd.cmd("SR,V,Auto")
+            self._ptd.cmd("SR,A,Auto")
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting ranging mode")
-            self._server._ptd.cmd(f"Go,1000,0,{self._id}_ranging")
+            self._ptd.cmd(f"Go,1000,0,{self._id}_ranging")
             self._go_command_time = time.monotonic()
 
             self._state = SessionState.RANGING
@@ -534,13 +596,13 @@ class Session:
             return True
 
         if mode == Mode.TESTING and self._state == SessionState.RANGING_DONE:
-            self._server._ptd.start()
-            self._server._ptd.cmd(f"SR,V,{self._maxVolts}")
-            self._server._ptd.cmd(f"SR,A,{self._maxAmps}")
+            self._ptd.start()
+            self._ptd.cmd(f"SR,V,{self._maxVolts}")
+            self._ptd.cmd(f"SR,A,{self._maxAmps}")
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting testing mode")
-            self._server._ptd.cmd(f"Go,1000,0,{self._id}_testing")
+            self._ptd.cmd(f"Go,1000,0,{self._id}_testing")
 
             self._state = SessionState.TESTING
 
@@ -562,10 +624,10 @@ class Session:
 
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
             self._state = SessionState.RANGING_DONE
-            self._server._ptd.stop()
+            self._ptd.stop()
             assert self._go_command_time is not None
             test_duration = time.monotonic() - self._go_command_time
-            dirname = os.path.join(self._server._config.out_dir, self._id + "_ranging")
+            dirname = os.path.join(self.log_dir_path, "ranging")
             os.mkdir(dirname)
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
                 f.write(
@@ -587,8 +649,8 @@ class Session:
 
         if mode == Mode.TESTING and self._state == SessionState.TESTING:
             self._state = SessionState.TESTING_DONE
-            self._server._ptd.stop()
-            dirname = os.path.join(self._server._config.out_dir, self._id + "_testing")
+            self._ptd.stop()
+            dirname = os.path.join(self.log_dir_path, "testing")
             os.mkdir(dirname)
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
                 f.write(
@@ -601,24 +663,18 @@ class Session:
 
     def upload(self, mode: Mode, fname: str) -> bool:
         if mode == Mode.RANGING and self._state == SessionState.RANGING_DONE:
-            dirname = os.path.join(self._server._config.out_dir, self._id + "_ranging")
+            dirname = os.path.join(self.log_dir_path, "ranging")
             return self._extract(fname, dirname)
         if mode == Mode.TESTING and self._state == SessionState.TESTING_DONE:
-            dirname = os.path.join(self._server._config.out_dir, self._id + "_testing")
+            dirname = os.path.join(self.log_dir_path, "testing")
             return self._extract(fname, dirname)
 
         # Unexpected state
         return False
 
     def drop(self) -> None:
-        try:
-            if (
-                self._state == SessionState.RANGING
-                or self._state == SessionState.TESTING
-            ):
-                self._server._ptd.stop()
-        finally:
-            self._state = SessionState.DONE
+        self._ptd.terminate()
+        self._state = SessionState.DONE
 
     def _extract(self, fname: str, dirname: str) -> bool:
         try:

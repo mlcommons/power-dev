@@ -179,12 +179,12 @@ def main() -> None:
     logging.info(f"Session id is {session!r}")
 
     common.log_sources()
+    out_dir = os.path.join(args.output, session)
+    os.mkdir(out_dir)
 
     for mode in ["ranging", "testing"]:
         logging.info(f"Running workload in {mode} mode")
-        out = os.path.join(args.output, f"{session}_{mode}")
-
-        # os.mkdir(out)
+        out = os.path.join(out_dir, mode)
 
         sync_check()
         command(serv, f"session,{session},start,{mode}", check=True)
