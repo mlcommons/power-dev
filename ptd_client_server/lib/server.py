@@ -532,7 +532,7 @@ class Tee:
     def __init__(self, fname: str) -> None:
         self._closed = False
         self._r, self.w = os.pipe()
-        self._f = open(fname, "w")
+        self._f = open(fname, "wb")
         self._thread = threading.Thread(target=self._run)
         self._thread.daemon = True
         self._thread.start()
@@ -559,7 +559,7 @@ class Tee:
                 rd_str = rd.decode(errors="ignore")
                 sys.stderr.write(rd_str)
                 sys.stderr.flush()
-                self._f.write(rd_str)
+                self._f.write(rd)
         finally:
             self._f.close()
             os.close(self._r)
