@@ -41,6 +41,32 @@ def command(server: common.Proto, command: str, check: bool = False) -> str:
     return response
 
 
+def check_paths(loadgen_logs: str, output: str, force: bool) -> None:
+    loadgen_logs_dir = os.path.abspath(loadgen_logs)
+    output_dir = os.path.abspath(output)
+
+    if loadgen_logs_dir == output_dir:
+        logging.fatal(
+            f"INDIR ({loadgen_logs!r}) and OUTDIR ({output!r}) should not be the same directory"
+        )
+        exit(1)
+
+    if loadgen_logs_dir == os.path.commonpath([loadgen_logs_dir, output_dir]):
+        logging.fatal(
+            f"OUTDIR ({output!r}) should not be the INDIR subdirectory ({loadgen_logs!r})"
+        )
+        exit(1)
+
+    if os.path.exists(loadgen_logs):
+        if force:
+            logging.warning(f"Removing old loadgen logs directory {loadgen_logs!r}")
+            shutil.rmtree(loadgen_logs)
+        else:
+            logging.fatal(f"The loadgen logs directory {loadgen_logs!r} already exists")
+            logging.fatal("Please remove it or specify --force argument")
+            exit(1)
+
+
 def command_get_file(server: common.Proto, command: str, save_name: str) -> None:
     logging.info(f"Sending command to the server: {command!r}")
     log = server.command(command)
@@ -122,18 +148,7 @@ def main() -> None:
         args.port = common.DEFAULT_PORT
         logging.warning(f"Assuming default port (--port {common.DEFAULT_PORT}")
 
-    if os.path.exists(args.loadgen_logs):
-        if args.force:
-            logging.warning(
-                f"Removing old loadgen logs directory {args.loadgen_logs!r}"
-            )
-            shutil.rmtree(args.loadgen_logs)
-        else:
-            logging.fatal(
-                f"The loadgen logs directory {args.loadgen_logs!r} already exists"
-            )
-            logging.fatal("Please remove it or specify --force argument")
-            exit(1)
+    check_paths(args.loadgen_logs, args.output, args.force)
 
     common.mkdir_if_ne(args.output)
 
