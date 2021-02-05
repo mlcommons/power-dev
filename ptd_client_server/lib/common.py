@@ -13,7 +13,7 @@
 # limitations under the License.
 # =============================================================================
 
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, List
 import json
 import logging
 import os
@@ -281,9 +281,37 @@ def check_label(label: str) -> bool:
     return all((c in valid_chars for c in label))
 
 
+class BufferHandler(logging.Handler):
+    def __init__(self) -> None:
+        logging.Handler.__init__(self)
+        self._records: Optional[List[logging.LogRecord]] = None
+
+    def start(self) -> None:
+        self._records = []
+
+    def stop(self, fname: Optional[str] = None) -> None:
+        if fname is None:
+            self._records = None
+            return
+        assert self._records is not None
+        records, self._records = self._records, None
+        with open(fname, "w", newline="\n") as f:
+            for record in records:
+                f.write("%s\n" % self.format(record))
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if self._records is not None:
+            self._records.append(record)
+
+
+log_redirect = BufferHandler()
+
+
 def init(name: str) -> None:
     logging.basicConfig(
-        level=logging.INFO, format=f"{name} %(asctime)s [%(levelname)s] %(message)s"
+        level=logging.INFO,
+        format=f"{name} %(asctime)s [%(levelname)s] %(message)s",
+        handlers=[logging.StreamHandler(), log_redirect],
     )
     sig.init()
 

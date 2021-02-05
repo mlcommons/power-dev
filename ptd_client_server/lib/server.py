@@ -387,6 +387,7 @@ class Server:
     def handle_connection(self, p: common.Proto) -> None:
         p.enable_keepalive()
 
+        common.log_redirect.start()
         with common.sig:
             # TODO: timeout and max msg size for recv
             magic = p.recv()
@@ -496,9 +497,16 @@ class Server:
         return "Error"
 
     def _drop_session(self) -> None:
-        if self.session is not None:
+        if self.session is None:
+            common.log_redirect.stop()
+            return
+        try:
+            self.session.drop()
+        finally:
             try:
-                self.session.drop()
+                common.log_redirect.stop(
+                    os.path.join(self.session.log_dir_path, "server_logs.txt")
+                )
             finally:
                 self.session = None
 

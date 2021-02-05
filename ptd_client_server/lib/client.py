@@ -134,6 +134,7 @@ def main() -> None:
         "-S", "--stop-server", action="store_true",
         help="stop the server after processing this client")
     # fmt: on
+    common.log_redirect.start()
 
     parser._action_groups.append(optional)
     args = parser.parse_args()
@@ -241,6 +242,7 @@ def main() -> None:
             os.remove(f"{out}.zip")
 
     logging.info("Done runs")
+    common.log_redirect.stop(os.path.join(out_dir, "client_logs.txt"))
 
     command(serv, f"session,{session},done", check=True)
 
