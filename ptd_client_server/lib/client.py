@@ -23,6 +23,7 @@ import socket
 import subprocess
 import zipfile
 
+from typing import Callable
 from . import time_sync
 from . import common
 
@@ -84,6 +85,12 @@ def create_zip(zip_filename: str, dirname: str) -> None:
                 filePath = os.path.join(folderName, filename)
                 zipPath = os.path.relpath(filePath, dirname)
                 zf.write(filePath, zipPath)
+
+
+def create_zip_logs(zip_filename: str, dirname: str) -> None:
+    with zipfile.ZipFile(zip_filename, "x", zipfile.ZIP_DEFLATED) as zf:
+        client_logs_path = os.path.join(dirname, "client_logs.txt")
+        zf.write(client_logs_path, os.path.relpath(client_logs_path, dirname))
 
 
 def main() -> None:
@@ -199,6 +206,19 @@ def main() -> None:
     out_dir = os.path.join(args.output, session)
     os.mkdir(out_dir)
 
+    def send_logs(directory: str, mode: str, create_zip: Callable[[], None]) -> None:
+        if not args.send_logs:
+            return
+        logging.info("Packing logs into zip and uploading to the server")
+        create_zip()
+        logging.info(
+            "Zip file size: " + common.human_bytes(os.stat(f"{directory}.zip").st_size)
+        )
+        serv.send(f"session,{session},upload,{mode}")
+        serv.send_file(f"{directory}.zip")
+        logging.info(serv.recv())
+        os.remove(f"{directory}.zip")
+
     for mode in ["ranging", "testing"]:
         logging.info(f"Running workload in {mode} mode")
         out = os.path.join(out_dir, mode)
@@ -230,19 +250,15 @@ def main() -> None:
             )
             exit(1)
 
-        if args.send_logs:
-            logging.info("Packing logs into zip and uploading to the server")
-            create_zip(f"{out}.zip", out)
-            logging.info(
-                "Zip file size: " + common.human_bytes(os.stat(f"{out}.zip").st_size)
-            )
-            serv.send(f"session,{session},upload,{mode}")
-            serv.send_file(f"{out}.zip")
-            logging.info(serv.recv())
-            os.remove(f"{out}.zip")
+        send_logs(out, mode, lambda: create_zip(f"{out}.zip", out))
 
     logging.info("Done runs")
+
     common.log_redirect.stop(os.path.join(out_dir, "client_logs.txt"))
+
+    send_logs(
+        out_dir, "receiving_logs", lambda: create_zip_logs(f"{out_dir}.zip", out_dir)
+    )
 
     command(serv, f"session,{session},done", check=True)
 

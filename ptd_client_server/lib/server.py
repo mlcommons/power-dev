@@ -471,8 +471,17 @@ class Server:
             if cmd == ["stop", "testing"]:
                 return unbool[self.session.stop(Mode.TESTING)]
 
-            if cmd == ["upload", "ranging"] or cmd == ["upload", "testing"]:
-                mode = Mode.RANGING if cmd[1] == "ranging" else Mode.TESTING
+            if (
+                cmd == ["upload", "ranging"]
+                or cmd == ["upload", "testing"]
+                or cmd == ["upload", "receiving_logs"]
+            ):
+                if cmd[1] == "ranging":
+                    mode = Mode.RANGING
+                elif cmd[1] == "testing":
+                    mode = Mode.TESTING
+                elif cmd[1] == "receiving_logs":
+                    mode = Mode.RECEIVING_LOGS
                 fname = os.path.join(
                     self._config.out_dir, self.session._id + cmd[1] + ".tmp"
                 )
@@ -526,6 +535,7 @@ class SessionState(Enum):
 class Mode(Enum):
     RANGING = 0
     TESTING = 1
+    RECEIVING_LOGS = 2
 
 
 class Tee:
@@ -675,6 +685,8 @@ class Session:
         if mode == Mode.TESTING and self._state == SessionState.TESTING_DONE:
             dirname = os.path.join(self.log_dir_path, "testing")
             return self._extract(fname, dirname)
+        if mode == Mode.RECEIVING_LOGS:
+            return self._extract(fname, self.log_dir_path)
 
         # Unexpected state
         return False
