@@ -693,6 +693,8 @@ class Session:
 def main() -> None:
     common.init("ptd-server")
 
+    common.system_check()
+
     parser = argparse.ArgumentParser(description="Server for communication with PTD")
     required = parser.add_argument_group("required arguments")
 

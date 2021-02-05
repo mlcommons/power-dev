@@ -334,3 +334,12 @@ def human_bytes(num: int) -> str:
 
 def log_sources() -> None:
     logging.info("Sources: " + json.dumps(source_hashes.get()))
+
+
+def system_check() -> None:
+    if sys.version_info < (3, 7):
+        logging.fatal("Python 3.7 or newer is required")
+        exit(1)
+    if sys.platform.startswith("cygwin"):
+        logging.fatal("Python installed through Cygwin is not supported")
+        exit(1)
