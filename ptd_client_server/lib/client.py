@@ -64,6 +64,8 @@ def create_zip(zip_filename: str, dirname: str) -> None:
 def main() -> None:
     common.init("client")
 
+    common.system_check()
+
     parser = argparse.ArgumentParser(
         description="PTD client",
         formatter_class=lambda prog: argparse.RawDescriptionHelpFormatter(
