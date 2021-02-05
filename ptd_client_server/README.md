@@ -222,7 +222,6 @@ echo "Building test program..."
 if [ ! -e build ]; then mkdir build; fi;
 g++ --std=c++11 -O3 -I.. -o repro.exe repro.cpp -Lloadgen_build -lmlperf_loadgen -lpthread
 ```
-Don't forget to `chmod +x dummy.sh`.
 
 Create `run_workload.sh`:
 ```sh
@@ -231,6 +230,8 @@ Create `run_workload.sh`:
 if [ ! -e build ]; then mkdir build; fi;
 ./repro.exe 800000 0 4 2048
 ```
+
+Don't forget to `chmod +x run_workload.sh`.
 
 Then start a client using `./run_workload.sh` as a workload being measured.
 The benchmark is hardcoded to put its logs into the `build` directory, so we specify it as a loadgen log location.
