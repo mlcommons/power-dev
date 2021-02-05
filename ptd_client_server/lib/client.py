@@ -21,10 +21,9 @@ import os
 import shutil
 import socket
 import subprocess
-import time
 import zipfile
-from . import time_sync
 
+from . import time_sync
 from . import common
 
 

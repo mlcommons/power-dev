@@ -18,12 +18,10 @@ from __future__ import annotations
 from decimal import Decimal
 from enum import Enum
 from ipaddress import ip_address
-from typing import Any, Callable, Optional, Dict, Tuple, List, Set, TextIO
-import threading
 from pathlib import Path
+from typing import Any, Callable, Optional, Dict, Tuple, List, Set
 import argparse
 import atexit
-import base64
 import configparser
 import datetime
 import logging
@@ -32,11 +30,12 @@ import re
 import socket
 import subprocess
 import sys
+import threading
 import time
 import zipfile
 
-from . import time_sync
 from . import common
+from . import time_sync
 
 
 RE_PTD_LOG = re.compile(
@@ -147,7 +146,7 @@ class ServerConfig:
             if parse is not None and isinstance(val, str):
                 try:
                     return parse(val)
-                except Exception as e:
+                except Exception:
                     logging.exception(
                         f"{filename}: could not parse option {option!r} in {section!r}"
                     )
@@ -179,7 +178,7 @@ class ServerConfig:
             self.ptd_logfile,
             "-p",
             str(self.ptd_port),
-            *([] if channel == None else ["-c", f"{channel}"]),
+            *([] if channel is None else ["-c", f"{channel}"]),
             *([] if ptd_interface_flag == "" else [ptd_interface_flag]),
             str(ptd_device_type),
             get("ptd", "devicePort"),

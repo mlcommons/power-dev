@@ -22,7 +22,6 @@ import signal
 import socket
 import socketserver
 import string
-import subprocess
 import sys
 import time
 
