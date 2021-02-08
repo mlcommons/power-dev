@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2018 The MLPerf Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,25 +18,45 @@ import base64
 import logging
 import os
 import shutil
+import time
 import socket
 import subprocess
+import uuid
 import zipfile
 
-from . import time_sync
 from . import common
+from . import summary as summarylib
+from . import time_sync
 
 
-def command(server: common.Proto, command: str, check: bool = False) -> str:
-    logging.info(f"Sending command to the server: {command!r}")
-    response = server.command(command)
-    if response is None:
-        logging.fatal("The server is disconnected")
-        exit(1)
-    logging.info(f"Got response: {response!r}")
-    if check and response != "OK":
-        logging.fatal("Got an unexpecting response from the server")
-        exit(1)
-    return response
+class CommandSender:
+    def __init__(self, server: common.Proto, summary: summarylib.Summary) -> None:
+        self._server = server
+        self._summary = summary
+
+    def __call__(self, command: str, check: bool = False) -> str:
+        logging.info(f"Sending command to the server: {command!r}")
+        time_command = time.time()
+        response = self._server.command(command)
+        time_response = time.time()
+        if response is None:
+            logging.fatal("The server is disconnected")
+            exit(1)
+        logging.info(f"Got response: {response!r}")
+        if check and response != "OK":
+            logging.fatal("Got an unexpecting response from the server")
+            exit(1)
+        self._summary.message((command, time_command), (response, time_response))
+        return response
+
+    def upload(self, command: str, fname: str) -> None:
+        time_command = time.time()
+        self._server.send(command)
+        self._server.send_file(fname)
+        response = self._server.recv()
+        time_response = time.time()
+        logging.info(f"Got response: {response!r}")
+        self._summary.message((command, time_command), (response, time_response))
 
 
 def check_paths(loadgen_logs: str, output: str, force: bool) -> None:
@@ -163,8 +182,12 @@ def main() -> None:
     serv = common.Proto(s)
     serv.enable_keepalive()
 
+    summary = summarylib.Summary()
+
+    command = CommandSender(serv, summary)
+
     # TODO: timeout and max msg size for recv
-    magic = command(serv, common.MAGIC_CLIENT)
+    magic = command(common.MAGIC_CLIENT)
     if magic != common.MAGIC_SERVER:
         logging.error(
             f"Handshake failed, expected {common.MAGIC_SERVER!r}, got {magic!r}"
@@ -176,23 +199,29 @@ def main() -> None:
         # Enable the "stop" flag on the server so it will stop after the client
         # disconnects.  We are sending this early to make sure the server
         # eventually will stop even if the client crashes unexpectedly.
-        command(serv, "stop", check=True)
+        command("stop", check=True)
 
     def sync_check() -> None:
         if not time_sync.sync(
             args.ntp,
-            lambda: float(command(serv, "time")),
-            lambda: command(serv, "set_ntp"),
+            lambda: float(command("time")),
+            lambda: command("set_ntp"),
         ):
             exit()
 
     sync_check()
 
-    session = command(serv, f"new,{args.label}")
-    if session is None or not session.startswith("OK "):
-        logging.fatal("Could not start new session")
+    summary.client_uuid = uuid.uuid4()
+    try:
+        session = command(f"new,{args.label},{summary.client_uuid}")
+        if session is None or not session.startswith("OK "):
+            logging.fatal("Could not start new session")
+            exit(1)
+        session, server_uuid = session[len("OK ") :].split(",")
+    except Exception:
         exit(1)
-    session = session[len("OK ") :]
+    summary.server_uuid = uuid.UUID(server_uuid)
+    summary.session_name = session
     logging.info(f"Session id is {session!r}")
 
     common.log_sources()
@@ -204,12 +233,17 @@ def main() -> None:
         out = os.path.join(out_dir, mode)
 
         sync_check()
-        command(serv, f"session,{session},start,{mode}", check=True)
 
+        summary.phase(mode, 0)
+        command(f"session,{session},start,{mode}", check=True)
+
+        summary.phase(mode, 1)
         logging.info(f"Running the workload {args.run_workload!r}")
         subprocess.run(args.run_workload, shell=True, check=True)
+        summary.phase(mode, 2)
 
-        command(serv, f"session,{session},stop,{mode}", check=True)
+        command(f"session,{session},stop,{mode}", check=True)
+        summary.phase(mode, 3)
 
         if (
             not os.path.isdir(args.loadgen_logs)
@@ -236,14 +270,23 @@ def main() -> None:
             logging.info(
                 "Zip file size: " + common.human_bytes(os.stat(f"{out}.zip").st_size)
             )
-            serv.send(f"session,{session},upload,{mode}")
-            serv.send_file(f"{out}.zip")
-            logging.info(serv.recv())
+            command.upload(f"session,{session},upload,{mode}", f"{out}.zip")
             os.remove(f"{out}.zip")
 
     logging.info("Done runs")
-    common.log_redirect.stop(os.path.join(out_dir, "client_logs.txt"))
 
-    command(serv, f"session,{session},done", check=True)
+    common.log_redirect.stop(os.path.join(out_dir, "client.log"))
+
+    command.upload(
+        f"session,{session},upload,client.log", os.path.join(out_dir, "client.log")
+    )
+
+    summary.hash_results(out_dir)
+    summary.save(os.path.join(out_dir, "client.json"))
+    command.upload(
+        f"session,{session},upload,client.json", os.path.join(out_dir, "client.json")
+    )
+
+    command(f"session,{session},done", check=True)
 
     logging.info("Successful exit")

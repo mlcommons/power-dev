@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2018 The MLPerf Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +18,7 @@ from decimal import Decimal
 from enum import Enum
 from ipaddress import ip_address
 from pathlib import Path
-from typing import Any, Callable, Optional, Dict, Tuple, List, Set
+from typing import Any, Callable, Optional, Dict, Tuple, List, Set, NoReturn
 import argparse
 import atexit
 import configparser
@@ -27,14 +26,17 @@ import datetime
 import logging
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
 import threading
 import time
+import uuid
 import zipfile
 
 from . import common
+from . import summary as summarylib
 from . import time_sync
 
 
@@ -51,8 +53,9 @@ RE_PTD_LOG = re.compile(
 )
 
 ANALYZER_SLEEP_SECONDS: float = 10
+_debug = os.getenv("MLPP_DEBUG") is not None
 
-if os.getenv("MLPP_DEBUG") is not None:
+if _debug:
     ANALYZER_SLEEP_SECONDS = 0.5
 
 
@@ -90,7 +93,7 @@ def read_log(log_fname: str, mark: str) -> str:
     return "".join(result)
 
 
-def exit_with_error_msg(error_msg: str) -> None:
+def exit_with_error_msg(error_msg: str) -> NoReturn:
     logging.fatal(error_msg)
     exit(1)
 
@@ -165,9 +168,10 @@ class ServerConfig:
             fallback=f"0.0.0.0 {common.DEFAULT_PORT}",
         )
 
-        channel: int = get("ptd", "channel", parse=int, fallback=None)
+        ptd_channel: Optional[int] = get("ptd", "channel", parse=int, fallback=None)
         ptd_device_type: int = get("ptd", "deviceType", parse=int)
         ptd_interface_flag: str = get("ptd", "interfaceFlag")
+        ptd_device_port: str = get("ptd", "devicePort")
         # TODO: validate ptd_interface_flag?
         # TODO: validate ptd_device_type?
         self.ptd_logfile: str = get("ptd", "logfile")
@@ -178,11 +182,19 @@ class ServerConfig:
             self.ptd_logfile,
             "-p",
             str(self.ptd_port),
-            *([] if channel is None else ["-c", f"{channel}"]),
+            *([] if ptd_channel is None else ["-c", f"{ptd_channel}"]),
             *([] if ptd_interface_flag == "" else [ptd_interface_flag]),
             str(ptd_device_type),
-            get("ptd", "devicePort"),
+            ptd_device_port,
         ]
+
+        self.ptd_summary: Dict[str, Any] = {
+            "command": self.ptd_command,
+            "device_type": ptd_device_type,
+            "interface_flag": ptd_interface_flag,
+            "device_port": ptd_device_port,
+            "channel": ptd_channel,
+        }
 
         for section, used_items in used.items():
             unused_options = conf[section].keys() - set((i.lower() for i in used_items))
@@ -226,6 +238,7 @@ class Ptd:
         atexit.register(self._force_terminate)
         self._tee: Optional[Tee] = None
         self._log_dir_path = log_dir_path
+        self._messages = summarylib.PtdMessages()
 
     def start(self) -> None:
         try:
@@ -346,6 +359,7 @@ class Ptd:
         if reply is None:
             exit_with_error_msg("Got no reply from PTDaemon")
         logging.info(f"Reply from ptd: {reply!r}")
+        self._messages.add(cmd, reply)
         return reply
 
     def _get_initial_range(self) -> None:
@@ -383,14 +397,19 @@ class Server:
         self.session: Optional[Session] = None
         self._config = config
         self._stop = False
+        self._summary: Optional[summarylib.Summary] = None
 
     def handle_connection(self, p: common.Proto) -> None:
         p.enable_keepalive()
+        self._summary = summarylib.Summary()
+        self._summary.ptd_config = self._config.ptd_summary
+        self._summary.debug = _debug
 
         common.log_redirect.start()
         with common.sig:
             # TODO: timeout and max msg size for recv
             magic = p.recv()
+        self._summary.message((magic, time.time()), (common.MAGIC_SERVER, time.time()))
         p.send(common.MAGIC_SERVER)
         if magic != common.MAGIC_CLIENT:
             logging.error(
@@ -401,7 +420,7 @@ class Server:
         try:
             while True:
                 with common.sig:
-                    cmd = p.recv()
+                    cmd, cmd_time = p.recv(), time.time()
                 if cmd is None:
                     logging.info("Connection closed")
                     break
@@ -424,6 +443,9 @@ class Server:
                     logging.info(
                         f"Sending reply to client {reply[:50]!r}... len={len(reply)}"
                     )
+
+                if self._summary is not None:
+                    self._summary.message((cmd, cmd_time), (reply, time.time()))
                 p.send(reply)
         finally:
             if self.session is not None:
@@ -447,13 +469,17 @@ class Server:
             logging.info("The server will be stopped after processing this client")
             self._stop = True
             return "OK"
-        if cmd[0] == "new" and len(cmd) == 2:
+        if cmd[0] == "new" and len(cmd) == 3:
             if self.session is not None:
                 self.session.drop()
             if not common.check_label(cmd[1]):
                 return "Error: invalid label"
+            assert self._summary is not None
+            self._summary.client_uuid = uuid.UUID(cmd[2])
+            self._summary.server_uuid = uuid.uuid4()
             self.session = Session(self, cmd[1])
-            return "OK " + self.session._id
+            self._summary.session_name = self.session._id
+            return f"OK {self.session._id},{self._summary.server_uuid}"
         if cmd[0] == "session" and len(cmd) >= 3:
             if self.session is None or (self.session._id != cmd[1] and "*" != cmd[1]):
                 return "Error: unknown session"
@@ -471,15 +497,28 @@ class Server:
             if cmd == ["stop", "testing"]:
                 return unbool[self.session.stop(Mode.TESTING)]
 
-            if cmd == ["upload", "ranging"] or cmd == ["upload", "testing"]:
-                mode = Mode.RANGING if cmd[1] == "ranging" else Mode.TESTING
+            if (
+                len(cmd) == 2
+                and cmd[0] == "upload"
+                and cmd[1] in ["ranging", "testing", "client.json", "client.log"]
+            ):
                 fname = os.path.join(
                     self._config.out_dir, self.session._id + cmd[1] + ".tmp"
                 )
                 result = False
                 try:
                     p.recv_file(fname)
-                    result = self.session.upload(mode, fname)
+                    if cmd[1] == "ranging":
+                        result = self.session.upload(Mode.RANGING, fname)
+                    elif cmd[1] == "testing":
+                        result = self.session.upload(Mode.TESTING, fname)
+                    elif cmd[1] in ("client.json", "client.log"):
+                        shutil.copyfile(
+                            fname, os.path.join(self.session.log_dir_path, cmd[1])
+                        )
+                        result = True
+                    else:
+                        result = False
                 finally:
                     try:
                         os.remove(fname)
@@ -500,15 +539,21 @@ class Server:
         if self.session is None:
             common.log_redirect.stop()
             return
+
+        log_dir_path = self.session.log_dir_path
+        ptd_messages = self.session._ptd._messages
+        session, self.session = self.session, None
+        summary, self._summary = self._summary, None
+
         try:
-            self.session.drop()
+            session.drop()
         finally:
-            try:
-                common.log_redirect.stop(
-                    os.path.join(self.session.log_dir_path, "server_logs.txt")
-                )
-            finally:
-                self.session = None
+            common.log_redirect.stop(os.path.join(log_dir_path, "server.log"))
+
+        if summary is not None:
+            summary.ptd_messages = ptd_messages
+            summary.hash_results(log_dir_path)
+            summary.save(os.path.join(log_dir_path, "server.json"))
 
     def close(self) -> None:
         self._drop_session()
@@ -588,7 +633,10 @@ class Session:
         if mode == Mode.TESTING and self._state == SessionState.TESTING:
             return True
 
+        assert self._server._summary is not None
+
         if mode == Mode.RANGING and self._state == SessionState.INITIAL:
+            self._server._summary.phase("ranging", 0)
             self._ptd.start()
             self._ptd.cmd("SR,V,Auto")
             self._ptd.cmd("SR,A,Auto")
@@ -600,9 +648,11 @@ class Session:
 
             self._state = SessionState.RANGING
 
+            self._server._summary.phase("ranging", 1)
             return True
 
         if mode == Mode.TESTING and self._state == SessionState.RANGING_DONE:
+            self._server._summary.phase("testing", 0)
             self._ptd.start()
             self._ptd.cmd(f"SR,V,{self._maxVolts}")
             self._ptd.cmd(f"SR,A,{self._maxAmps}")
@@ -613,6 +663,7 @@ class Session:
 
             self._state = SessionState.TESTING
 
+            self._server._summary.phase("testing", 1)
             return True
 
         # Unexpected state
@@ -623,6 +674,13 @@ class Session:
             return True
         if mode == Mode.TESTING and self._state == SessionState.TESTING_DONE:
             return True
+
+        assert self._server._summary is not None
+
+        if mode == Mode.RANGING and self._state == SessionState.RANGING:
+            self._server._summary.phase("ranging", 2)
+        if mode == Mode.TESTING and self._state == SessionState.TESTING:
+            self._server._summary.phase("testing", 2)
 
         with common.sig:
             time.sleep(ANALYZER_SLEEP_SECONDS)
@@ -652,6 +710,7 @@ class Session:
                 else:
                     raise
             self._go_command_time = None
+            self._server._summary.phase("ranging", 3)
             return True
 
         if mode == Mode.TESTING and self._state == SessionState.TESTING:
@@ -663,6 +722,7 @@ class Session:
                 f.write(
                     read_log(self._server._config.ptd_logfile, self._id + "_testing")
                 )
+            self._server._summary.phase("testing", 3)
             return True
 
         # Unexpected state

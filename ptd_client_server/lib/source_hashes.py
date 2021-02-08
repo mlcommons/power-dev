@@ -137,3 +137,18 @@ def _normalize(path: str) -> str:
 
 def _sort_dict(x: Dict[str, Any]) -> "OrderedDict[str, Any]":
     return OrderedDict(sorted(x.items()))
+
+
+def hash_dir(dirname: str) -> Dict[str, str]:
+    result: Dict[str, str] = {}
+
+    for path, dirs, files in os.walk(dirname, topdown=True):
+        relpath = os.path.relpath(path, dirname)
+        if relpath == ".":
+            relpath = ""
+        for file in files:
+            fname = os.path.join(relpath, file)
+            with open(os.path.join(path, file), "rb") as f:
+                result[_normalize(fname)] = hashlib.sha1(f.read()).hexdigest()
+
+    return _sort_dict(result)
