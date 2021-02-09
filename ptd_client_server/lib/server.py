@@ -168,7 +168,7 @@ class ServerConfig:
             fallback=f"0.0.0.0 {common.DEFAULT_PORT}",
         )
 
-        ptd_channel: Optional[int] = get("ptd", "channel", parse=int, fallback=None)
+        ptd_channel: Optional[str] = get("ptd", "channel", fallback=None)
         ptd_device_type: int = get("ptd", "deviceType", parse=int)
         ptd_interface_flag: str = get("ptd", "interfaceFlag")
         ptd_device_port: str = get("ptd", "devicePort")
@@ -182,7 +182,7 @@ class ServerConfig:
             self.ptd_logfile,
             "-p",
             str(self.ptd_port),
-            *([] if ptd_channel is None else ["-c", f"{ptd_channel}"]),
+            *([] if ptd_channel is None else ["-c", ptd_channel]),
             *([] if ptd_interface_flag == "" else [ptd_interface_flag]),
             str(ptd_device_type),
             ptd_device_port,
