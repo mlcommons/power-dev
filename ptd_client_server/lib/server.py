@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Dict, Tuple, List, Set, NoReturn
 import argparse
 import atexit
+import builtins
 import configparser
 import datetime
 import logging
@@ -46,9 +47,9 @@ RE_PTD_LOG = re.compile(
         Watts, [^,]*,
         Volts, (?P<v> [^,]* ),
         Amps,  (?P<a> [^,]* ),
-        .*,
+        PF, [^,]*,
         Mark,  (?P<mark> [^,]* )
-    $""",
+    """,
     re.X,
 )
 
@@ -67,15 +68,104 @@ class MaxVoltsAmpsNegativeValuesError(Exception):
     pass
 
 
-def max_volts_amps(log_fname: str, mark: str) -> Tuple[str, str]:
+class LitNotFoundError(Exception):
+    pass
+
+
+class ExtraChannelError(Exception):
+    pass
+
+
+class Parser:
+    def __init__(self, row: str):
+        self.words = row.rstrip().split(",")
+        self._cur_number = 0
+        self.word_len = len(self.words)
+
+    def skip(self) -> None:
+        self.str()
+
+    def lit(self, column_name: str) -> None:
+        if self.words[self._cur_number] == column_name:
+            self.skip()
+            return
+        raise LitNotFoundError(
+            f"Expected {column_name!r}, got {self.words[self._cur_number]!r}"
+        )
+
+    def check(self, column_name: str) -> bool:
+        return self.words[self._cur_number] == column_name
+
+    def decimal(self) -> Any:
+        return self._next(Decimal, "Decimal")
+
+    def str(self) -> builtins.str:
+        num, self._cur_number = self._cur_number, self._cur_number + 1
+        return self.words[num]
+
+    def _next(
+        self, parse: Callable[[builtins.str], Any], expected_type: builtins.str
+    ) -> Any:
+        value = self.str()
+        try:
+            return parse(value)
+        except Exception:
+            logging.error(f"Expected {expected_type!r}, got {value!r}")
+            raise
+
+    def is_finished(self) -> bool:
+        return self._cur_number >= len(self.words) - 1
+
+
+def max_volts_amps(
+    log_fname: str, mark: str, start_channel: int, amount_of_channels: int
+) -> Tuple[str, str]:
     maxVolts = Decimal("-1")
     maxAmps = Decimal("-1")
     with open(log_fname, "r") as f:
         for line in f:
             m = RE_PTD_LOG.match(line.rstrip("\r\n"))
             if m and m["mark"] == mark:
-                maxVolts = max(maxVolts, Decimal(m["v"]))
-                maxAmps = max(maxAmps, Decimal(m["a"]))
+                parser = Parser(line)
+                parser.lit("Time")
+                parser.skip()
+                parser.lit("Watts")
+                parser.skip()
+                parser.lit("Volts")
+                volts = parser.decimal()
+                parser.lit("Amps")
+                amps = parser.decimal()
+                parser.lit("PF")
+                parser.skip()
+                parser.lit("Mark")
+                parser.skip()
+                maxVolts = max(maxVolts, volts)
+                maxAmps = max(maxAmps, amps)
+                channel_range = list(
+                    range(start_channel, start_channel + amount_of_channels)
+                )
+                while not parser.is_finished():
+                    is_sutable_channel = True
+                    if not parser.check(f"Ch{channel_range[0]}"):
+                        is_sutable_channel = False
+                    else:
+                        channel_range.pop(0)
+                    parser.skip()
+                    parser.lit("Watts")
+                    parser.skip()
+                    parser.lit("Volts")
+                    volts = parser.decimal()
+                    parser.lit("Amps")
+                    amps = parser.decimal()
+                    parser.lit("PF")
+                    parser.skip()
+                    if is_sutable_channel:
+                        maxVolts = max(maxVolts, volts)
+                        maxAmps = max(maxAmps, amps)
+                if len(channel_range):
+                    raise ExtraChannelError(
+                        f"There are extra ptd channels in configuration"
+                    )
     if maxVolts <= 0 or maxAmps <= 0:
         raise MaxVoltsAmpsNegativeValuesError(f"Could not find values for {mark!r}")
     return str(maxVolts), str(maxAmps)
@@ -131,6 +221,9 @@ class ServerConfig:
         _UNSET = object()
         used: Dict[str, Set[str]] = {}
 
+        def parse_channel(channael_value: str) -> List[str]:
+            return channael_value.strip().split(",")
+
         def get(
             section: str,
             option: str,
@@ -168,7 +261,9 @@ class ServerConfig:
             fallback=f"0.0.0.0 {common.DEFAULT_PORT}",
         )
 
-        ptd_channel: Optional[str] = get("ptd", "channel", fallback=None)
+        self.ptd_channel: Optional[List[str]] = get(
+            "ptd", "channel", parse=parse_channel, fallback=None
+        )
         ptd_device_type: int = get("ptd", "deviceType", parse=int)
         ptd_interface_flag: str = get("ptd", "interfaceFlag")
         ptd_device_port: str = get("ptd", "devicePort")
@@ -182,7 +277,7 @@ class ServerConfig:
             self.ptd_logfile,
             "-p",
             str(self.ptd_port),
-            *([] if ptd_channel is None else ["-c", ptd_channel]),
+            *([] if self.ptd_channel is None else ["-c", ",".join(self.ptd_channel)]),
             *([] if ptd_interface_flag == "" else [ptd_interface_flag]),
             str(ptd_device_type),
             ptd_device_port,
@@ -193,7 +288,7 @@ class ServerConfig:
             "device_type": ptd_device_type,
             "interface_flag": ptd_interface_flag,
             "device_port": ptd_device_port,
-            "channel": ptd_channel,
+            "channel": self.ptd_channel,
         }
 
         for section, used_items in used.items():
@@ -699,9 +794,21 @@ class Session:
                     read_log(self._server._config.ptd_logfile, self._id + "_ranging")
                 )
             try:
+                start_channel = 0
+                channels_amount = 0
+
+                if self._server._config.ptd_channel is not None:
+                    start_channel = int(self._server._config.ptd_channel[0])
+                    if len(self._server._config.ptd_channel) == 2:
+                        channels_amount = int(self._server._config.ptd_channel[1])
+
                 self._maxVolts, self._maxAmps = max_volts_amps(
-                    self._server._config.ptd_logfile, self._id + "_ranging"
+                    self._server._config.ptd_logfile,
+                    self._id + "_ranging",
+                    start_channel,
+                    channels_amount,
                 )
+
             except MaxVoltsAmpsNegativeValuesError as e:
                 if test_duration < 1:
                     raise MeasurementEndedTooFastError(
