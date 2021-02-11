@@ -277,7 +277,10 @@ class Ptd:
             )
         self._tee.started()
 
-        retries = 100
+        # Linux PTDaemon connected to WT333E over USB takes 17 seconds to fire
+        # up.  We wait for 30 seconds to be sure.
+        retries = 300
+
         s = None
         while s is None and retries > 0:
             if self._process is not None and self._process.poll() is not None:
