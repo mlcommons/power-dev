@@ -9,8 +9,8 @@ participant "Client\n//on SUT//" as Client
 participant "Server\n//on Director//" as Server
 participant "PTDaemon\n//on Director//" as PTDaemon
 
-Client -> Server: mlcommons/power client v1
-Client <-- Server: mlcommons/power server v1
+Client -> Server: mlcommons/power client v2
+Client <-- Server: mlcommons/power server v2
 
 group Optional: --stop-server
     Client -> Server: stop
@@ -22,8 +22,8 @@ rnote over Client
     NTP sync
 endnote
 
-Client -> Server: new,{label}
-Client <-- Server: OK {id}\n//e.g OK 2020-12-21_20-02-14_mylabel//
+Client -> Server: new,{label},{client_uuid}\n//e.g. new,mylabel,3a88739f-…//
+Client <-- Server: OK {id},{server_uuid}\n//e.g OK 2020-12-21_20-02…// \n//…-14_mylabel,0cfedefd-…//
 
 Client -> Server: time
 Client <-- Server: OK 1608580934.312
@@ -92,6 +92,14 @@ group Stage: Testing
         Client <-- Server: OK
     end
 end
+
+Client -> Server: session,{id},upload,client.log
+Server -> Server: Store client.log
+Client <-- Server: OK
+
+Client -> Server: session,{id},upload,client.json
+Server -> Server: Store client.json
+Client <-- Server: OK
 
 Client -> Server: session,{id},done
 Client <-- Server: OK

@@ -288,18 +288,24 @@ After a successful run, you'll see these new files and directories on the server
 ```
 D:\ptd-logs
 ├── … (old entries skipped)
-├── 2020-12-28_15-20-52_mylabel_ranging
-│   ├── spl.txt                           ← power log
-│   ├── mlperf_log_accuracy.json        ┐
-│   ├── mlperf_log_detail.txt           │ ← loadgen log (if --send-logs is used)
-│   ├── mlperf_log_summary.txt          │
-│   └── mlperf_log_trace.json           ┘
-└── 2020-12-28_15-20-52_mylabel_testing
-    ├── spl.txt                           ← power log
-    ├── mlperf_log_accuracy.json        ┐
-    ├── mlperf_log_detail.txt           │ ← loadgen log (if --send-logs is used)
-    ├── mlperf_log_summary.txt          │
-    └── mlperf_log_trace.json           ┘
+└── 2020-12-28_15-20-52_mylabel
+    ├── client.json                      ← client summary
+    ├── client.log                       ← client stdout log
+    ├── ptd_logs.txt                     ← ptdaemon stdout log
+    ├── ranging
+    │   ├── mlperf_log_accuracy.json   ┐ ← loadgen log, if --send-logs is used.
+    │   ├── mlperf_log_detail.txt      │   Produced by the workload script on
+    │   ├── mlperf_log_summary.txt     │   the client.
+    │   ├── mlperf_log_trace.json      ┘
+    │   └── spl.txt                      ← power log
+    ├── server.json                      ← server summary
+    ├── server.log                       ← server stdout log
+    └── testing
+        ├── mlperf_log_accuracy.json   ┐
+        ├── mlperf_log_detail.txt      │ ← loadgen log (same as above)
+        ├── mlperf_log_summary.txt     │
+        ├── mlperf_log_trace.json      ┘
+        └── spl.txt                      ← power log
 ```
 
 And these on the SUT:
@@ -307,16 +313,19 @@ And these on the SUT:
 ```
 ./client-output-directory
 ├── … (old entries skipped)
-├── 2020-12-28_15-20-52_mylabel_ranging
-│   ├── mlperf_log_accuracy.json
-│   ├── mlperf_log_detail.txt
-│   ├── mlperf_log_summary.txt
-│   └── mlperf_log_trace.json
-└── 2020-12-28_15-20-52_mylabel_testing
-    ├── mlperf_log_accuracy.json
-    ├── mlperf_log_detail.txt
-    ├── mlperf_log_summary.txt
-    └── mlperf_log_trace.json
+└── 2020-12-28_15-20-52_mylabel_ranging
+    ├── client.json
+    ├── client.log
+    ├── ranging
+    │   ├── mlperf_log_accuracy.json   ┐
+    │   ├── mlperf_log_detail.txt      │ ← loadgen log
+    │   ├── mlperf_log_summary.txt     │
+    │   └── mlperf_log_trace.json      ┘
+    └── testing
+        ├── mlperf_log_accuracy.json   ┐
+        ├── mlperf_log_detail.txt      │ ← loadgen log
+        ├── mlperf_log_summary.txt     │
+        └── mlperf_log_trace.json      ┘
 ```
 
 `spl.txt` consists of the following lines:
