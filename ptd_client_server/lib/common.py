@@ -31,9 +31,18 @@ from . import source_hashes
 DEFAULT_PORT = 4950
 DEFAULT_IP_ADDR = "0.0.0.0"
 
-PROTO_VERSION = "2"
+PROTO_VERSION = "3"
 MAGIC_CLIENT = f"mlcommons/power client v{PROTO_VERSION}"
 MAGIC_SERVER = f"mlcommons/power server v{PROTO_VERSION}"
+
+
+FETCH_FILES_LIST = [
+    "ptd_logs.txt",
+    "ranging/spl.txt",
+    "server.json",
+    "server.log",
+    "testing/spl.txt",
+]
 
 
 class Proto:
