@@ -118,7 +118,9 @@ def set_ntp(server: str) -> None:
                 int(utcTime.microsecond / 1000),
             )
         except Exception:
-            logging.exception("Could not set time")
+            logging.exception(
+                "Could not set system time. You can synchronize time between client and server manually."
+            )
             raise
     else:
         command = ["ntpdate", "-b", "--", server]
@@ -128,7 +130,9 @@ def set_ntp(server: str) -> None:
         try:
             subprocess.run(command, input="", check=True)
         except Exception:
-            logging.error("Could not set time using ntpd")
+            logging.error(
+                "Could not set system time using ntpd. You can synchronize time between client and server manually."
+            )
             raise
     # It could take sometime to set system time
     time.sleep(1)

@@ -210,7 +210,7 @@ class SignalHandler:
                 raise KeyboardInterrupt
         else:
             logging.fatal(
-                "Got SIGTERM singal twice, performing non-graceful shutdown..."
+                "Got SIGTERM signal again, aborting graceful shutdown and exiting..."
             )
             self.force_stopped = True
             exit(1)
