@@ -54,30 +54,7 @@ def init() -> None:
         "modules": {},
     }
 
-    for path, dirs, files in os.walk(base_dir, topdown=True):
-        exclude = {
-            "__pycache__",
-            ".mypy_cache",
-            ".pytest_cache",
-        }
-        dirs[:] = [d for d in dirs if d not in exclude]
-
-        relpath = os.path.relpath(path, base_dir)
-        if relpath == ".":
-            relpath = ""
-        for file in filter(lambda f: f.endswith(".py"), files):
-            fname = os.path.join(relpath, file)
-            with open(os.path.join(path, file), "rb") as f:
-                b_source = f.read()
-                if b"\r" in b_source:
-                    logging.fatal(
-                        f"{file} contains '\\r'."
-                        "Make sure that source files are not converted to CRLF format."
-                    )
-                    exit(1)
-                result["sources"][_normalize(fname)] = hashlib.sha1(
-                    b_source
-                ).hexdigest()
+    result["sources"] = get_sources_checksum(base_dir)
 
     for name, module in sys.modules.items():
         if not (
@@ -117,6 +94,35 @@ def init() -> None:
     result["modules"] = _sort_dict(result["modules"])
 
     _source_hashes = result
+
+
+def get_sources_checksum(base_dir: pathlib.Path) -> Dict[str, str]:
+    result = {}
+
+    for path, dirs, files in os.walk(base_dir, topdown=True):
+        exclude = {
+            "__pycache__",
+            ".mypy_cache",
+            ".pytest_cache",
+        }
+        dirs[:] = [d for d in dirs if d not in exclude]
+
+        relpath = os.path.relpath(path, base_dir)
+        if relpath == ".":
+            relpath = ""
+        for file in filter(lambda f: f.endswith(".py"), files):
+            fname = os.path.join(relpath, file)
+            with open(os.path.join(path, file), "rb") as f:
+                b_source = f.read()
+                if b"\r" in b_source:
+                    logging.fatal(
+                        f"{file} contains '\\r'."
+                        "Make sure that source files are not converted to CRLF format."
+                    )
+                    exit(1)
+                result[_normalize(fname)] = hashlib.sha1(b_source).hexdigest()
+
+    return result
 
 
 def _normalize(path: str) -> str:
