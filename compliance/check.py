@@ -37,7 +37,12 @@ class LineWithoutTimeStamp(Exception):
 from lib import source_hashes  # type: ignore
 
 SUPPORTED_VERSION = ["1.9.1", "1.9.2"]
-SUPPORTED_VENDER = "Yokogawa"
+SUPPORTED_MODEL = {
+    8: "yokogawawt210",
+    49: "yokogawawt310",
+    52: "yokogawawt333e",
+    77: "yokogawawt333e",
+}
 
 RESULT_PATHS_C = [
     "client.log",
@@ -97,22 +102,32 @@ class SessionDescriptor:
         ), f"Required fields {', '.join(absent_keys)!r} does not exist in {self.path!r}"
 
 
-def get_dict_diff_items(d1: Dict, d2: Dict) -> Dict[Any, Any]:
-    return {k: d1[k] for k in d1 if k in d2 and d1[k] != d2[k]}
+def compare_dicts_values(d1: Dict[str, str], d2: Dict[str, str], comment: str) -> None:
+    files_with_diff_check_sum = {k: d1[k] for k in d1 if k in d2 and d1[k] != d2[k]}
+    assert len(files_with_diff_check_sum) == 0, f"{comment}" + "".join(
+        [
+            f"Expected {d1[i]}, but got {d2[i]} for {i}\n"
+            for i in files_with_diff_check_sum
+        ]
+    )
+
+
+def compare_dicts(s1: Dict[str, str], s2: Dict[str, str], comment: str) -> None:
+    assert (
+        s1.keys() == s2.keys()
+    ), f"{comment} Expected files are {', '.join(s1.keys())!r}, but got {', '.join(s2.keys())!r}."
+
+    compare_dicts_values(s1, s2, comment)
 
 
 def sources_check(sd: SessionDescriptor, sources_path: Optional[str] = None) -> None:
     s = sd.json_object["sources"]
     calc_s = source_hashes.get_sources_checksum(sources_path)
-
-    assert (
-        s.keys() == calc_s.keys()
-    ), f"Expected source files are {', '.join(s.keys())!r}. Got {', '.join(calc_s.keys())!r} from {sd.path}."
-
-    files_with_diff_check_sum = get_dict_diff_items(s, calc_s)
-    assert (
-        len(files_with_diff_check_sum) == 0
-    ), f"Another checksum is expected for {', '.join(files_with_diff_check_sum)!r} in the {sd.path}."
+    compare_dicts(
+        s,
+        calc_s,
+        f"{sd.path} 'sources' values and calculated {sources_path} content comparison:\n",
+    )
 
 
 def ptd_messages_reply_check(sd: SessionDescriptor) -> None:
@@ -135,9 +150,9 @@ def ptd_messages_reply_check(sd: SessionDescriptor) -> None:
     assert (
         version in SUPPORTED_VERSION
     ), f"PTD version {version!r} is not supported. Supported versions are 1.9.1 and 1.9.2"
-    assert power_meter_model.startswith(
-        SUPPORTED_VENDER
-    ), f"Power meter {power_meter_model!r} is not supportable. Only Yokogawa power meters are supported."
+    assert (
+        power_meter_model.lower().strip() in SUPPORTED_MODEL.values()
+    ), f"Power meter {power_meter_model!r} is not supportable. Only {', '.join(SUPPORTED_MODEL.values())} are supported."
 
     def check_reply(cmd: str, reply: str) -> None:
         stop_counter = 0
@@ -150,7 +165,7 @@ def ptd_messages_reply_check(sd: SessionDescriptor) -> None:
                     stop_counter += 1
                 assert (
                     reply == msg["reply"]
-                ), f"Wrang reply for {msg['cmd']!r} command. Expected {reply!r}, got {msg['reply']!r}"
+                ), f"Wrang reply for {msg['cmd']!r} command. Expected {reply!r}, but got {msg['reply']!r}"
 
     check_reply("SR,A", "Range A changed")
     check_reply("SR,V", "Range V changed")
@@ -170,7 +185,7 @@ def uuid_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> No
     ), "'client uuid' is not equal."
     assert uuid.UUID(uuid_c["server"]) == uuid.UUID(
         uuid_s["server"]
-    ), "'server uuid' in is not equal."
+    ), "'server uuid' is not equal."
 
 
 def phases_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> None:
@@ -186,7 +201,7 @@ def phases_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> 
         for i in range(len(phases_client)):
             assert (
                 abs(phases_client[i][0] - phases_server[i][0]) < 0.2
-            ), f"The time difference for {i + 1} phase of {mode} mode is more than 1 second."
+            ), f"The time difference for {i + 1} phase of {mode} mode is equal or more than 200ms."
 
     comapre_time(phases_ranging_c, phases_ranging_s, RANGING_MODE)
     comapre_time(phases_testing_c, phases_testing_s, TESTING_NODE)
@@ -195,9 +210,11 @@ def phases_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> 
 def session_name_check(
     client_sd: SessionDescriptor, server_sd: SessionDescriptor
 ) -> None:
+    session_name_c = client_sd.json_object["session_name"]
+    session_name_s = server_sd.json_object["session_name"]
     assert (
-        client_sd.json_object["session_name"] == server_sd.json_object["session_name"]
-    ), "'session_name' is not equal"
+        session_name_c == session_name_s
+    ), f"Session name is not equal. Client session name is {session_name_c!r}. Server session name is {session_name_s!r}"
 
 
 def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> None:
@@ -205,11 +222,13 @@ def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -
     ms = server_sd.json_object["messages"]
 
     for i in range(len(mc)):
-        assert mc[i]["cmd"] == ms[i]["cmd"], f"Commands {i} are different."
+        assert (
+            mc[i]["cmd"] == ms[i]["cmd"]
+        ), f"Commands {i} are different. Server command is {ms[i]['cmd']!r}. Client command is {mc[i]['cmd']!r}."
         if "time" != mc[i]["cmd"]:
             assert (
                 mc[i]["reply"] == ms[i]["reply"]
-            ), f"Replies on command {mc[i]['cmd']!r} are different."
+            ), f"Replies on command {mc[i]['cmd']!r} are different. Server reply is {ms[i]['reply']!r}. Client command is {mc[i]['reply']!r}."
 
 
 def results_check(
@@ -222,31 +241,34 @@ def results_check(
     results_without_server_json = results.copy()
     results_without_server_json.pop("server.json")
 
-    assert (
-        results_without_server_json == results_s
-    ), f"Result checksum is not as expected for {result_path}"
+    compare_dicts(
+        results_s,
+        results_without_server_json,
+        f"{server_sd.path} 'sources' checksum values and calculated {result_path} content checksum comparison:\n",
+    )
 
     def result_files_compare(res, ref_res, path):
         extra_files = set(res.keys()) - set(ref_res)
         assert (
             len(extra_files) == 0
-        ), f"There are extra files {', '.join(extra_files)!r} in {path}"
+        ), f"There are extra files {', '.join(extra_files)!r} in the results of {path}"
 
         absent_files = set(ref_res) - set(res.keys())
         assert (
             len(absent_files) == 0
-        ), f"There are absent files {', '.join(absent_files)!r} in {path}"
+        ), f"There are absent files {', '.join(absent_files)!r} in the results of {path}"
 
     result_files_compare(results_s, RESULT_PATHS, server_sd.path)
     result_files_compare(results_c, RESULT_PATHS_C, client_sd.path)
 
-    files_with_diff_check_sum = get_dict_diff_items(results_c, results_s)
-    assert (
-        len(files_with_diff_check_sum) == 0
-    ), f"There are files with a different checksum: {', '.join(files_with_diff_check_sum)!r}"
+    compare_dicts_values(
+        results_c,
+        results_s,
+        f"{server_sd.path} and {client_sd.path} results checksum comparison",
+    )
 
 
-def check_ptd_logs(path: str, server_sd: SessionDescriptor) -> None:
+def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     start_ranging_time = None
     stop_ranging_time = None
     ranging_mark = f"{server_sd.json_object['session_name']}_ranging"
@@ -299,6 +321,14 @@ def check_ptd_logs(path: str, server_sd: SessionDescriptor) -> None:
         find_common_problem("(?<=ERROR:).+", line, COMMON_ERROR)
 
 
+def check_ptd_config(server_sd: SessionDescriptor) -> None:
+    dev_num = server_sd.json_object["ptd_config"]["device_type"]
+    assert dev_num in SUPPORTED_MODEL.keys(), (
+        f"Device number {dev_num} is not supported. Supported numbers are "
+        + ", ".join([str(i) for i in SUPPORTED_MODEL.keys()])
+    )
+
+
 def check(path: str, sources_path: str) -> None:
     client = SessionDescriptor(os.path.join(path, "client.json"))
     server = SessionDescriptor(os.path.join(path, "server.json"))
@@ -311,7 +341,9 @@ def check(path: str, sources_path: str) -> None:
     session_name_check(client, server)
     messages_check(client, server)
     results_check(server, client, path)
-    check_ptd_logs(path, server)
+    check_ptd_logs(server, path)
+    check_ptd_config(server)
+    print("Results of the test are consistent")
 
 
 if __name__ == "__main__":
