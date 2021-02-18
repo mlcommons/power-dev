@@ -38,10 +38,10 @@ from lib import source_hashes  # type: ignore
 
 SUPPORTED_VERSION = ["1.9.1", "1.9.2"]
 SUPPORTED_MODEL = {
-    8: "yokogawawt210",
-    49: "yokogawawt310",
-    52: "yokogawawt333e",
-    77: "yokogawawt333e",
+    8: "YokogawaWT210",
+    49: "YokogawaWT310",
+    52: "YokogawaWT333E",
+    77: "YokogawaWT333E",
 }
 
 RESULT_PATHS_C = [
@@ -151,7 +151,7 @@ def ptd_messages_reply_check(sd: SessionDescriptor) -> None:
         version in SUPPORTED_VERSION
     ), f"PTD version {version!r} is not supported. Supported versions are 1.9.1 and 1.9.2"
     assert (
-        power_meter_model.lower().strip() in SUPPORTED_MODEL.values()
+        power_meter_model in SUPPORTED_MODEL.values()
     ), f"Power meter {power_meter_model!r} is not supportable. Only {', '.join(SUPPORTED_MODEL.values())} are supported."
 
     def check_reply(cmd: str, reply: str) -> None:
@@ -165,7 +165,7 @@ def ptd_messages_reply_check(sd: SessionDescriptor) -> None:
                     stop_counter += 1
                 assert (
                     reply == msg["reply"]
-                ), f"Wrang reply for {msg['cmd']!r} command. Expected {reply!r}, but got {msg['reply']!r}"
+                ), f"Wrong reply for {msg['cmd']!r} command. Expected {reply!r}, but got {msg['reply']!r}"
 
     check_reply("SR,A", "Range A changed")
     check_reply("SR,V", "Range V changed")
@@ -282,7 +282,7 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
             log_datetime = datetime.strptime(log_time_str.group(0), DATA_FORMAT)
             return Decimal(log_datetime.timestamp())
 
-        raise LineWithoutTimeStamp(f"{line.strip()!r} in ptd_log.txt")
+        raise LineWithoutTimeStamp(f"{line.strip()!r} in ptd_log.txt.")
 
     def find_common_problem(reg_exp: str, line: str, common_problem: str) -> None:
         problem_line = re.search(reg_exp, line)
@@ -290,31 +290,61 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
         if problem_line and problem_line.group(0):
             log_time = get_time(line)
             if start_ranging_time is None or stop_ranging_time is None:
-                raise Exception("Can not find ranging time in ptd_logs.txt")
+                raise Exception("Can not find ranging time in ptd_logs.txt.")
             if start_ranging_time < log_time < stop_ranging_time:
                 assert (
                     problem_line.group(0).strip().startswith(common_problem)
                 ), f"{line.strip()!r} in ptd_log.txt"
                 return
-            raise Exception(f"{line.strip()!r} in ptd_log.txt")
+            raise Exception(f"{line.strip()!r} in ptd_log.txt.")
 
-    expected_line = f": Go with mark {ranging_mark!r}"
+    start_ranging_line = f": Go with mark {ranging_mark!r}"
 
-    for line in ptd_log_lines:
+    def get_msg_without_time(line: str) -> Optional[str]:
         try:
             get_time(line)
         except LineWithoutTimeStamp:
-            continue
+            return line
         msg_o = re.search(f"(?<={DATE_REGEXP}).+", line)
         if msg_o is None:
+            return None
+        return msg_o.group(0).strip()
+
+    for line in ptd_log_lines:
+        msg = get_msg_without_time(line)
+        if msg is None:
             continue
-        msg = msg_o.group(0).strip()
-        if (not start_ranging_time) and (expected_line == msg):
+        if (not start_ranging_time) and (start_ranging_line == msg):
             start_ranging_time = get_time(line)
         if (not stop_ranging_time) and bool(start_ranging_time):
             if ": Completed test" == msg:
                 stop_ranging_time = get_time(line)
                 break
+
+    if start_ranging_time is None or stop_ranging_time is None:
+        raise Exception("Can not find ranging time in ptd_logs.txt.")
+
+    is_uncertainty_check_activated = False
+
+    for line in ptd_log_lines:
+        msg_o = re.search(f"Uncertainty checking for Yokogawa\S+ is activated", line)
+        if msg_o is not None:
+            try:
+                log_time = None
+                log_time = get_time(line)
+            except LineWithoutTimeStamp:
+                assert (
+                    log_time is not None
+                ), "ptd_logs.txt: Can not get timestamp for 'Uncertainty checking for Yokogawa... is activated' message."
+            assert (
+                start_ranging_time is not None and log_time < start_ranging_time
+            ), "ptd_logs.txt: Uncertainty checking Yokogawa... was activated after ranging mode was started."
+            is_uncertainty_check_activated = True
+            break
+
+    assert (
+        is_uncertainty_check_activated
+    ), "ptd_logs.txt: Line 'Uncertainty checking for Yokogawa... is activated' is not found."
 
     for line in ptd_log_lines:
         find_common_problem("(?<=WARNING:).+", line, COMMON_WARNING)
@@ -327,6 +357,41 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
         f"Device number {dev_num} is not supported. Supported numbers are "
         + ", ".join([str(i) for i in SUPPORTED_MODEL.keys()])
     )
+
+
+def check_mlperf_log_summary(path: str) -> None:
+    loadgen_summ_path_r = os.path.join(path, "ranging", "mlperf_log_summary.txt")
+    loadgen_summ_path_t = os.path.join(path, "testing", "mlperf_log_summary.txt")
+
+    def get_completed_samples_per_second(path: str) -> Optional[float]:
+        performance = None
+        with open(path, "r") as file:
+            for line in file:
+                performance_o = re.search(
+                    "(?<=Completed samples per second    :).+$", line
+                )
+                if performance_o is None:
+                    continue
+                performance = float(performance_o.group(0).strip())
+                break
+        return performance
+
+    performance_r = get_completed_samples_per_second(loadgen_summ_path_r)
+    assert (
+        performance_r is not None
+    ), "ranging/loadgen_log_summary.txt: Completed samples per second value is not found."
+
+    performance_t = get_completed_samples_per_second(loadgen_summ_path_t)
+    assert (
+        performance_t is not None
+    ), "testing/loadgen_log_summary.txt: Completed samples per second value is not found."
+
+    performance_comparison = abs(performance_r - performance_t) / performance_r
+    performance_comparison_in_percent = performance_comparison * 100
+
+    assert (
+        performance_comparison_in_percent < 1
+    ), "loadgen_log_summary.txt: Performance in testing mode differs from performance in ranging mode by more than 1 percent."
 
 
 def check(path: str, sources_path: str) -> None:
@@ -343,6 +408,7 @@ def check(path: str, sources_path: str) -> None:
     results_check(server, client, path)
     check_ptd_logs(server, path)
     check_ptd_config(server)
+    check_mlperf_log_summary(path)
     print("Results of the test are consistent")
 
 

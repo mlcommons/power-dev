@@ -348,14 +348,14 @@ Keepalive packets are sent each 2 seconds, and we consider the connection broken
 [TCP keepalive]: https://en.wikipedia.org/wiki/Keepalive#TCP_keepalive
 [inference]: https://github.com/mlcommons/inference
 
-## Compilance checks
+## Compliance checks
 
 The directory [compilance] contains the compliance checker script that need to be run by the submitter in order to demonstrate a valid submission.
 ```
 usage: check.py [-h] session_directory sources_directory
 
 ```
-If everething is ok you will see the next message:
+If everything is ok you will see the next message:
 ```
 Results of the test are consistent
 ```
