@@ -335,16 +335,16 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
             except LineWithoutTimeStamp:
                 assert (
                     log_time is not None
-                ), "ptd_logs.txt check. Can not get timestamp for 'Uncertainty checking for Yokogawa... is activated' message."
+                ), "ptd_logs.txt: Can not get timestamp for 'Uncertainty checking for Yokogawa... is activated' message."
             assert (
                 start_ranging_time is not None and log_time < start_ranging_time
-            ), "ptd_logs.txt check. Uncertainty checking Yokogawa... was activated after ranging mode was started."
+            ), "ptd_logs.txt: Uncertainty checking Yokogawa... was activated after ranging mode was started."
             is_uncertainty_check_activated = True
             break
 
     assert (
         is_uncertainty_check_activated
-    ), "ptd_logs.txt check. Line 'Uncertainty checking for Yokogawa... is activated' is not found."
+    ), "ptd_logs.txt: Line 'Uncertainty checking for Yokogawa... is activated' is not found."
 
     for line in ptd_log_lines:
         find_common_problem("(?<=WARNING:).+", line, COMMON_WARNING)
@@ -357,6 +357,41 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
         f"Device number {dev_num} is not supported. Supported numbers are "
         + ", ".join([str(i) for i in SUPPORTED_MODEL.keys()])
     )
+
+
+def check_mlperf_log_summary(path: str) -> None:
+    loadgen_summ_path_r = os.path.join(path, "ranging", "mlperf_log_summary.txt")
+    loadgen_summ_path_t = os.path.join(path, "testing", "mlperf_log_summary.txt")
+
+    def get_completed_samples_per_second(path: str) -> Optional[float]:
+        performance = None
+        with open(path, "r") as file:
+            for line in file:
+                performance_o = re.search(
+                    "(?<=Completed samples per second    :).+$", line
+                )
+                if performance_o is None:
+                    continue
+                performance = float(performance_o.group(0).strip())
+                break
+        return performance
+
+    performance_r = get_completed_samples_per_second(loadgen_summ_path_r)
+    assert (
+        performance_r is not None
+    ), "ranging/loadgen_log_summary.txt: Completed samples per second value is not found."
+
+    performance_t = get_completed_samples_per_second(loadgen_summ_path_t)
+    assert (
+        performance_t is not None
+    ), "testing/loadgen_log_summary.txt: Completed samples per second value is not found."
+
+    performance_comparison = abs(performance_r - performance_t) / performance_r
+    performance_comparison_in_percent = performance_comparison * 100
+
+    assert (
+        performance_comparison_in_percent < 1
+    ), "loadgen_log_summary.txt: Performance in testing mode differs from performance in ranging mode by more than 1 percent."
 
 
 def check(path: str, sources_path: str) -> None:
@@ -373,6 +408,7 @@ def check(path: str, sources_path: str) -> None:
     results_check(server, client, path)
     check_ptd_logs(server, path)
     check_ptd_config(server)
+    check_mlperf_log_summary(path)
     print("Results of the test are consistent")
 
 
