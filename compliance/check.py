@@ -121,6 +121,7 @@ def compare_dicts(s1: Dict[str, str], s2: Dict[str, str], comment: str) -> None:
 
 
 def sources_check(sd: SessionDescriptor, sources_path: Optional[str] = None) -> None:
+    """Calculate sources checksums and compare them with sources checksums from the given json file."""
     s = sd.json_object["sources"]
     calc_s = source_hashes.get_sources_checksum(sources_path)
     compare_dicts(
@@ -131,6 +132,11 @@ def sources_check(sd: SessionDescriptor, sources_path: Optional[str] = None) -> 
 
 
 def ptd_messages_reply_check(sd: SessionDescriptor) -> None:
+    """Performs multiple checks:
+    - Check the version of the power meter.
+    - Check device model
+    - Compare message replies with expected values.
+    """
     msgs = sd.json_object["ptd_messages"]
 
     def get_ptd_answer(command: str) -> str:
@@ -177,6 +183,7 @@ def ptd_messages_reply_check(sd: SessionDescriptor) -> None:
 
 
 def uuid_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> None:
+    """Compare UUIDs from client.json and server.json. They should be the same."""
     uuid_c = client_sd.json_object["uuid"]
     uuid_s = server_sd.json_object["uuid"]
 
@@ -189,6 +196,7 @@ def uuid_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> No
 
 
 def phases_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> None:
+    """Check that the time difference between corresponding checkpoint values from client.json and server.json is less than 200 ms."""
     phases_ranging_c = client_sd.json_object["phases"]["ranging"]
     phases_testing_c = client_sd.json_object["phases"]["testing"]
     phases_ranging_s = server_sd.json_object["phases"]["ranging"]
@@ -210,6 +218,7 @@ def phases_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> 
 def session_name_check(
     client_sd: SessionDescriptor, server_sd: SessionDescriptor
 ) -> None:
+    """Check that session names from client.json and server.json are equal."""
     session_name_c = client_sd.json_object["session_name"]
     session_name_s = server_sd.json_object["session_name"]
     assert (
@@ -218,6 +227,7 @@ def session_name_check(
 
 
 def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> None:
+    """Compare messages values and replies from client.json and server.json."""
     mc = client_sd.json_object["messages"]
     ms = server_sd.json_object["messages"]
 
@@ -234,6 +244,10 @@ def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -
 def results_check(
     server_sd: SessionDescriptor, client_sd: SessionDescriptor, result_path: str
 ) -> None:
+    """Calculate the checksum for result files. Compare it with the checksums of the results from server.json.
+       Compare results checksum from client.json and server.json.
+       Check that results from client.json and server.json have no extra and absent files.
+    """
     results = dict(source_hashes.hash_dir(result_path))
     results_s = server_sd.json_object["results"]
     results_c = client_sd.json_object["results"]
@@ -269,6 +283,9 @@ def results_check(
 
 
 def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
+    """Check if ptd message starts with 'WARNING' or 'ERROR' in ptd logs.
+       Check 'Uncertainty checking for Yokogawa... is activated' in PTD logs.
+    """
     start_ranging_time = None
     stop_ranging_time = None
     ranging_mark = f"{server_sd.json_object['session_name']}_ranging"
@@ -352,6 +369,7 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
 
 
 def check_ptd_config(server_sd: SessionDescriptor) -> None:
+    """Check the device number is supported"""
     dev_num = server_sd.json_object["ptd_config"]["device_type"]
     assert dev_num in SUPPORTED_MODEL.keys(), (
         f"Device number {dev_num} is not supported. Supported numbers are "
@@ -360,6 +378,7 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
 
 
 def check_mlperf_log_summary(path: str) -> None:
+    """Check that performance for ranging and testing mode is comparable"""
     loadgen_summ_path_r = os.path.join(path, "ranging", "mlperf_log_summary.txt")
     loadgen_summ_path_t = os.path.join(path, "testing", "mlperf_log_summary.txt")
 
@@ -411,15 +430,15 @@ def check(path: str, sources_path: str) -> int:
     server = SessionDescriptor(os.path.join(path, "server.json"))
 
     check_with_description = {
-        "Client sources checksum check": lambda: sources_check(client, sources_path),
-        "Server sources checksum check": lambda: sources_check(server, sources_path),
-        "PTD replies check": lambda: ptd_messages_reply_check(server),
-        "UUID check": lambda: uuid_check(client, server),
-        "Session name check": lambda: session_name_check(client, server),
-        "Time difference check": lambda: phases_check(client, server),
-        "Client server messages check": lambda: messages_check(client, server),
-        "Results check": lambda: results_check(server, client, path),
-        "Check PTD logs": lambda: check_ptd_logs(server, path),
+        "Check client sources checksum": lambda: sources_check(client, sources_path),
+        "Check server sources checksum": lambda: sources_check(server, sources_path),
+        "Check PTD replies": lambda: ptd_messages_reply_check(server),
+        "Check UUID": lambda: uuid_check(client, server),
+        "Check session name": lambda: session_name_check(client, server),
+        "Check time difference": lambda: phases_check(client, server),
+        "Check client server messages": lambda: messages_check(client, server),
+        "Check results checksum": lambda: results_check(server, client, path),
+        "Check errors and warnings from PTD logs": lambda: check_ptd_logs(server, path),
         "Check PTD configuration": lambda: check_ptd_config(server),
         "Check mlperf log summary": lambda: check_mlperf_log_summary(path),
     }
