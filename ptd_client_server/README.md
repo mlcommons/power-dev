@@ -385,14 +385,14 @@ D:\ptd-logs
 To get this structure on the server side you should use `--send-logs` option for client.py. On other hand, you can copy ranging and testing results from the client output folder manually.
 If everything is fine you see the next messages after check.py run:
 ```
-[x] Client sources checksum check
-[x] Server sources checksum check
-[x] PTD replies check
-[x] UUID check
-[x] Session name check
-[x] Time difference check
-[x] Client server messages check
-[x] Results check
+[x] Check client sources checksum
+[x] Check server sources checksum
+[x] Check PTD replies
+[x] Check UUID
+[x] Check session name
+[x] Check time difference
+[x] Check client server messages
+[X] Check results checksum
 [x] Check PTD logs
 [x] Check PTD configuration
 [x] Check mlperf log summary
