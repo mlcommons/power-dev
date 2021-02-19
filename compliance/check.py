@@ -16,7 +16,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, List, Tuple, Set, Any, Optional
+from typing import Dict, List, Tuple, Set, Any, Optional, Callable
 import argparse
 import json
 import os
@@ -394,22 +394,42 @@ def check_mlperf_log_summary(path: str) -> None:
     ), "loadgen_log_summary.txt: Performance in testing mode differs from performance in ranging mode by more than 1 percent."
 
 
-def check(path: str, sources_path: str) -> None:
+def check_with_logging(check_name: str, check: Callable[[], None]) -> bool:
+    try:
+        check()
+    except Exception as e:
+        print(f"[ ] {check_name}")
+        print(f"\t{e}\n")
+        return False
+    else:
+        print(f"[x] {check_name}")
+    return True
+
+
+def check(path: str, sources_path: str) -> int:
     client = SessionDescriptor(os.path.join(path, "client.json"))
     server = SessionDescriptor(os.path.join(path, "server.json"))
 
-    sources_check(client, sources_path)
-    sources_check(server, sources_path)
-    ptd_messages_reply_check(server)
-    uuid_check(client, server)
-    phases_check(client, server)
-    session_name_check(client, server)
-    messages_check(client, server)
-    results_check(server, client, path)
-    check_ptd_logs(server, path)
-    check_ptd_config(server)
-    check_mlperf_log_summary(path)
-    print("Results of the test are consistent")
+    check_with_description = {
+        "Client sources checksum check": lambda: sources_check(client, sources_path),
+        "Server sources checksum check": lambda: sources_check(server, sources_path),
+        "PTD replies check": lambda: ptd_messages_reply_check(server),
+        "UUID check": lambda: uuid_check(client, server),
+        "Session name check": lambda: session_name_check(client, server),
+        "Time difference check": lambda: phases_check(client, server),
+        "Client server messages check": lambda: messages_check(client, server),
+        "Results check": lambda: results_check(server, client, path),
+        "Check PTD logs": lambda: check_ptd_logs(server, path),
+        "Check PTD configuration": lambda: check_ptd_config(server),
+        "Check mlperf log summary": lambda: check_mlperf_log_summary(path),
+    }
+
+    result = True
+
+    for description in check_with_description.keys():
+        result &= check_with_logging(description, check_with_description[description])
+
+    return 0 if result is True else 1
 
 
 if __name__ == "__main__":
@@ -421,4 +441,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    check(args.session_directory, args.sources_directory)
+    return_code = check(args.session_directory, args.sources_directory)
+
+    exit(return_code)
