@@ -355,13 +355,47 @@ The directory [compilance] contains the compliance checker script that need to b
 usage: check.py [-h] session_directory sources_directory
 
 ```
-If everything is ok you will see the next message:
-```
-Results of the test are consistent
-```
 Usage example:
 ```
 python .\checker.py D:\ptd-logs\2020-12-28_15-20-52_mylabel_ranging\ ..\ptd_client_server\
+```
+The expected structure of D:\ptd-logs\2020-12-28_15-20-52_mylabel_ranging\ is:
+```
+D:\ptd-logs
+├── … (old entries skipped)
+└── 2020-12-28_15-20-52_mylabel
+    ├── client.json
+    ├── client.log
+    ├── ptd_logs.txt
+    ├── ranging
+    │   ├── mlperf_log_accuracy.json
+    │   ├── mlperf_log_detail.txt
+    │   ├── mlperf_log_summary.txt
+    │   ├── mlperf_log_trace.json
+    │   └── spl.txt
+    ├── server.json
+    ├── server.log
+    └── testing
+        ├── mlperf_log_accuracy.json
+        ├── mlperf_log_detail.txt
+        ├── mlperf_log_summary.txt
+        ├── mlperf_log_trace.json
+        └── spl.txt
+```
+To get this structure on the server side you should use `--send-logs` option for client.py. On other hand, you can copy ranging and testing results from the client output folder manually.
+If everything is fine you see the next messages after check.py run:
+```
+[x] Client sources checksum check
+[x] Server sources checksum check
+[x] PTD replies check
+[x] UUID check
+[x] Session name check
+[x] Time difference check
+[x] Client server messages check
+[x] Results check
+[x] Check PTD logs
+[x] Check PTD configuration
+[x] Check mlperf log summary
 ```
 
 [compilance]: ../compliance
