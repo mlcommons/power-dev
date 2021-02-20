@@ -227,10 +227,18 @@ def session_name_check(
 
 
 def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> None:
-    """Compare messages values and replies from client.json and server.json."""
+    """Compare client and server messages list length.
+       Compare messages values and replies from client.json and server.json.
+       Compare client and server version.
+    """
     mc = client_sd.json_object["messages"]
     ms = server_sd.json_object["messages"]
 
+    assert (
+        len(mc) == len(ms) - 1
+    ), f"Client commands list length ({len(mc)}) should be less than server commands list length ({len(ms)}) by one. "
+
+    # Check that server.json contains all client.json messages and replies.
     for i in range(len(mc)):
         assert (
             mc[i]["cmd"] == ms[i]["cmd"]
@@ -239,6 +247,19 @@ def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -
             assert (
                 mc[i]["reply"] == ms[i]["reply"]
             ), f"Replies on command {mc[i]['cmd']!r} are different. Server reply is {ms[i]['reply']!r}. Client command is {mc[i]['reply']!r}."
+
+    # Check client and server version from server.json. Server.json contains all client.json messages and replies. Checked earlier.
+    def get_version(regexp: str, line: str) -> str:
+        version_o = re.search(regexp, line)
+        assert version_o is not None, f"Server version is not defined in:'{line}'"
+        return version_o.group(1)
+
+    client_version = get_version("mlcommons\/power client v(\d+)$", ms[0]["cmd"])
+    server_version = get_version("mlcommons\/power server v(\d+)$", ms[0]["reply"])
+
+    assert (
+        client_version == server_version
+    ), f"Client.py version ({client_version}) is not equal server.py version ({server_version})."
 
 
 def results_check(
