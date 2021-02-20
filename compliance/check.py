@@ -131,11 +131,12 @@ def sources_check(sd: SessionDescriptor, sources_path: Optional[str] = None) -> 
     )
 
 
-def ptd_messages_reply_check(sd: SessionDescriptor) -> None:
+def ptd_messages_check(sd: SessionDescriptor) -> None:
     """Performs multiple checks:
     - Check the version of the power meter.
-    - Check device model
+    - Check the device model.
     - Compare message replies with expected values.
+    - Check that initial values set after the test is completed.
     """
     msgs = sd.json_object["ptd_messages"]
 
@@ -180,6 +181,40 @@ def ptd_messages_reply_check(sd: SessionDescriptor) -> None:
         "Starting untimed measurement, maximum 500000 samples at 1000ms with 0 rampup samples",
     )
     check_reply("Stop", "Stopping untimed measurement")
+
+    def get_initial_range(param_num: int, reply: str) -> str:
+        reply_list = reply.split(",")
+        try:
+            if reply_list[param_num] == "0" and float(reply_list[param_num + 1]) > 0:
+                return reply_list[param_num + 1]
+        except (ValueError, IndexError) as e:
+            raise Exception(
+                f"Can not get power meters initial values from {reply!r}"
+            )
+        return "Auto"
+
+    def get_command_by_value_and_number(cmd: str, number: int) -> Optional[str]:
+        command_counter = 0
+        for msg in msgs:
+            if msg["cmd"].startswith(cmd):
+                command_counter += 1
+                if command_counter == number:
+                    return msg["cmd"]
+        raise Exception(f"Can not find the {number} command starting with {cmd!r}.")
+        return None
+
+    initial_amps = get_initial_range(1, msgs[2]["reply"])
+    initial_volts = get_initial_range(3, msgs[2]["reply"])
+
+    initial_amps_command = get_command_by_value_and_number("SR,A", 3)
+    initial_volts_command = get_command_by_value_and_number("SR,V", 3)
+
+    assert (
+        initial_amps_command == f"SR,A,{initial_amps}"
+    ), f"Do not set Amps range as initial. Expected 'SR,A,{initial_amps}', got {initial_amps_command!r}."
+    assert (
+        initial_volts_command == f"SR,V,{initial_volts}"
+    ), f"Do not set Volts range as initial. Expected 'SR,V,{initial_volts}', got {initial_volts_command!r}."
 
 
 def uuid_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> None:
@@ -453,7 +488,7 @@ def check(path: str, sources_path: str) -> int:
     check_with_description = {
         "Check client sources checksum": lambda: sources_check(client, sources_path),
         "Check server sources checksum": lambda: sources_check(server, sources_path),
-        "Check PTD replies": lambda: ptd_messages_reply_check(server),
+        "Check PTD commands and replies": lambda: ptd_messages_check(server),
         "Check UUID": lambda: uuid_check(client, server),
         "Check session name": lambda: session_name_check(client, server),
         "Check time difference": lambda: phases_check(client, server),
