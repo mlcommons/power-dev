@@ -387,7 +387,7 @@ If everything is fine you see the next messages after check.py run:
 ```
 [x] Check client sources checksum
 [x] Check server sources checksum
-[x] Check PTD replies
+[x] Check PTD commands and replies
 [x] Check UUID
 [x] Check session name
 [x] Check time difference
