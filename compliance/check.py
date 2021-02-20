@@ -188,9 +188,7 @@ def ptd_messages_check(sd: SessionDescriptor) -> None:
             if reply_list[param_num] == "0" and float(reply_list[param_num + 1]) > 0:
                 return reply_list[param_num + 1]
         except (ValueError, IndexError) as e:
-            raise Exception(
-                f"Can not get power meters initial values from {reply!r}"
-            )
+            raise Exception(f"Can not get power meters initial values from {reply!r}")
         return "Auto"
 
     def get_command_by_value_and_number(cmd: str, number: int) -> Optional[str]:
@@ -425,12 +423,31 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
 
 
 def check_ptd_config(server_sd: SessionDescriptor) -> None:
-    """Check the device number is supported"""
-    dev_num = server_sd.json_object["ptd_config"]["device_type"]
+    """Check the device number is supported.
+       If the device is multichannel, check that two numbers are using for channel configuration.
+    """
+    ptd_config = server_sd.json_object["ptd_config"]
+
+    dev_num = ptd_config["device_type"]
     assert dev_num in SUPPORTED_MODEL.keys(), (
         f"Device number {dev_num} is not supported. Supported numbers are "
         + ", ".join([str(i) for i in SUPPORTED_MODEL.keys()])
     )
+
+    if dev_num == 77:
+        channels = ""
+        command = ptd_config["command"]
+
+        for i in range(len(command)):
+            if command[i] == "-c":
+                channels = command[i + 1]
+                break
+
+        assert (
+            len(channels.split(",")) == 2
+            and ptd_config["channel"]
+            and len(ptd_config["channel"]) == 2
+        ), f"Expected multichannel mode for {SUPPORTED_MODEL[dev_num]}, but got 1-channel."
 
 
 def check_mlperf_log_summary(path: str) -> None:
