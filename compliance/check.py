@@ -131,11 +131,12 @@ def sources_check(sd: SessionDescriptor, sources_path: Optional[str] = None) -> 
     )
 
 
-def ptd_messages_reply_check(sd: SessionDescriptor) -> None:
+def ptd_messages_check(sd: SessionDescriptor) -> None:
     """Performs multiple checks:
     - Check the version of the power meter.
-    - Check device model
+    - Check the device model.
     - Compare message replies with expected values.
+    - Check that initial values set after the test is completed.
     """
     msgs = sd.json_object["ptd_messages"]
 
@@ -180,6 +181,38 @@ def ptd_messages_reply_check(sd: SessionDescriptor) -> None:
         "Starting untimed measurement, maximum 500000 samples at 1000ms with 0 rampup samples",
     )
     check_reply("Stop", "Stopping untimed measurement")
+
+    def get_initial_range(param_num: int, reply: str) -> str:
+        reply_list = reply.split(",")
+        try:
+            if reply_list[param_num] == "0" and float(reply_list[param_num + 1]) > 0:
+                return reply_list[param_num + 1]
+        except (ValueError, IndexError) as e:
+            raise Exception(f"Can not get power meters initial values from {reply!r}")
+        return "Auto"
+
+    def get_command_by_value_and_number(cmd: str, number: int) -> Optional[str]:
+        command_counter = 0
+        for msg in msgs:
+            if msg["cmd"].startswith(cmd):
+                command_counter += 1
+                if command_counter == number:
+                    return msg["cmd"]
+        raise Exception(f"Can not find the {number} command starting with {cmd!r}.")
+        return None
+
+    initial_amps = get_initial_range(1, msgs[2]["reply"])
+    initial_volts = get_initial_range(3, msgs[2]["reply"])
+
+    initial_amps_command = get_command_by_value_and_number("SR,A", 3)
+    initial_volts_command = get_command_by_value_and_number("SR,V", 3)
+
+    assert (
+        initial_amps_command == f"SR,A,{initial_amps}"
+    ), f"Do not set Amps range as initial. Expected 'SR,A,{initial_amps}', got {initial_amps_command!r}."
+    assert (
+        initial_volts_command == f"SR,V,{initial_volts}"
+    ), f"Do not set Volts range as initial. Expected 'SR,V,{initial_volts}', got {initial_volts_command!r}."
 
 
 def uuid_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> None:
@@ -227,10 +260,18 @@ def session_name_check(
 
 
 def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> None:
-    """Compare messages values and replies from client.json and server.json."""
+    """Compare client and server messages list length.
+       Compare messages values and replies from client.json and server.json.
+       Compare client and server version.
+    """
     mc = client_sd.json_object["messages"]
     ms = server_sd.json_object["messages"]
 
+    assert (
+        len(mc) == len(ms) - 1
+    ), f"Client commands list length ({len(mc)}) should be less than server commands list length ({len(ms)}) by one. "
+
+    # Check that server.json contains all client.json messages and replies.
     for i in range(len(mc)):
         assert (
             mc[i]["cmd"] == ms[i]["cmd"]
@@ -239,6 +280,19 @@ def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -
             assert (
                 mc[i]["reply"] == ms[i]["reply"]
             ), f"Replies on command {mc[i]['cmd']!r} are different. Server reply is {ms[i]['reply']!r}. Client command is {mc[i]['reply']!r}."
+
+    # Check client and server version from server.json. Server.json contains all client.json messages and replies. Checked earlier.
+    def get_version(regexp: str, line: str) -> str:
+        version_o = re.search(regexp, line)
+        assert version_o is not None, f"Server version is not defined in:'{line}'"
+        return version_o.group(1)
+
+    client_version = get_version("mlcommons\/power client v(\d+)$", ms[0]["cmd"])
+    server_version = get_version("mlcommons\/power server v(\d+)$", ms[0]["reply"])
+
+    assert (
+        client_version == server_version
+    ), f"Client.py version ({client_version}) is not equal server.py version ({server_version})."
 
 
 def results_check(
@@ -369,12 +423,31 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
 
 
 def check_ptd_config(server_sd: SessionDescriptor) -> None:
-    """Check the device number is supported"""
-    dev_num = server_sd.json_object["ptd_config"]["device_type"]
+    """Check the device number is supported.
+       If the device is multichannel, check that two numbers are using for channel configuration.
+    """
+    ptd_config = server_sd.json_object["ptd_config"]
+
+    dev_num = ptd_config["device_type"]
     assert dev_num in SUPPORTED_MODEL.keys(), (
         f"Device number {dev_num} is not supported. Supported numbers are "
         + ", ".join([str(i) for i in SUPPORTED_MODEL.keys()])
     )
+
+    if dev_num == 77:
+        channels = ""
+        command = ptd_config["command"]
+
+        for i in range(len(command)):
+            if command[i] == "-c":
+                channels = command[i + 1]
+                break
+
+        assert (
+            len(channels.split(",")) == 2
+            and ptd_config["channel"]
+            and len(ptd_config["channel"]) == 2
+        ), f"Expected multichannel mode for {SUPPORTED_MODEL[dev_num]}, but got 1-channel."
 
 
 def check_mlperf_log_summary(path: str) -> None:
@@ -432,7 +505,7 @@ def check(path: str, sources_path: str) -> int:
     check_with_description = {
         "Check client sources checksum": lambda: sources_check(client, sources_path),
         "Check server sources checksum": lambda: sources_check(server, sources_path),
-        "Check PTD replies": lambda: ptd_messages_reply_check(server),
+        "Check PTD commands and replies": lambda: ptd_messages_check(server),
         "Check UUID": lambda: uuid_check(client, server),
         "Check session name": lambda: session_name_check(client, server),
         "Check time difference": lambda: phases_check(client, server),
