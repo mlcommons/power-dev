@@ -247,6 +247,33 @@ def phases_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> 
     comapre_time(phases_ranging_c, phases_ranging_s, RANGING_MODE)
     comapre_time(phases_testing_c, phases_testing_s, TESTING_NODE)
 
+    def compare_duration(range_duration: Decimal, test_duration: Decimal) -> None:
+        duration_diff = abs(range_duration - test_duration) / max(
+            range_duration, test_duration
+        )
+        duration_diff_percent = duration_diff * 100
+
+        assert (
+            duration_diff_percent < 5
+        ), "Duration of ranging mode differs from the duration of testing mode by more than 5 percent"
+
+    # Compare test duration using client.json and unix time.
+    # It should be enough because phases values from client.json and server.json have not significant differences.
+    ranging_duration = phases_ranging_c[2][0] - phases_ranging_c[1][0]
+    testing_duration = phases_testing_c[2][0] - phases_testing_c[1][0]
+
+    compare_duration(ranging_duration, testing_duration)
+
+    ranging_duration = phases_ranging_c[2][1] - phases_ranging_c[1][1]
+    testing_duration = phases_testing_c[2][1] - phases_testing_c[1][1]
+
+    compare_duration(ranging_duration, testing_duration)
+
+    ranging_duration = phases_ranging_s[2][1] - phases_ranging_s[1][1]
+    testing_duration = phases_testing_s[2][1] - phases_testing_s[1][1]
+
+    compare_duration(ranging_duration, testing_duration)
+
 
 def session_name_check(
     client_sd: SessionDescriptor, server_sd: SessionDescriptor
