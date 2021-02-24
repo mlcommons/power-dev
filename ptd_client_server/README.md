@@ -395,7 +395,6 @@ If everything is fine you see the next messages after check.py run:
 [X] Check results checksum
 [x] Check errors and warnings from PTD logs
 [x] Check PTD configuration
-[x] Check mlperf log summary
 ```
 
 [compilance]: ../compliance
