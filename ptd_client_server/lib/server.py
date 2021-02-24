@@ -59,6 +59,9 @@ _debug = os.getenv("MLPP_DEBUG") is not None
 if _debug:
     ANALYZER_SLEEP_SECONDS = 0.5
 
+# https://github.com/mlcommons/power-dev/issues/154#issuecomment-785188217
+MULTICHANNEL_DEVICES = [48, 59, 61, 77]
+
 
 class MeasurementEndedTooFastError(Exception):
     pass
@@ -221,8 +224,8 @@ class ServerConfig:
         _UNSET = object()
         used: Dict[str, Set[str]] = {}
 
-        def parse_channel(channael_value: str) -> List[str]:
-            return channael_value.strip().split(",")
+        def parse_channel(channel_value: str) -> List[int]:
+            return [int(s) for s in channel_value.split(",")]
 
         def get(
             section: str,
@@ -261,7 +264,7 @@ class ServerConfig:
             fallback=f"0.0.0.0 {common.DEFAULT_PORT}",
         )
 
-        self.ptd_channel: Optional[List[str]] = get(
+        self.ptd_channel: Optional[List[int]] = get(
             "ptd", "channel", parse=parse_channel, fallback=None
         )
         ptd_device_type: int = get("ptd", "deviceType", parse=int)
@@ -277,7 +280,11 @@ class ServerConfig:
             self.ptd_logfile,
             "-p",
             str(self.ptd_port),
-            *([] if self.ptd_channel is None else ["-c", ",".join(self.ptd_channel)]),
+            *(
+                []
+                if self.ptd_channel is None
+                else ["-c", ",".join(str(x) for x in self.ptd_channel)]
+            ),
             *([] if ptd_interface_flag == "" else [ptd_interface_flag]),
             str(ptd_device_type),
             ptd_device_port,
@@ -305,10 +312,10 @@ class ServerConfig:
                 f"{filename}: ignoring unknown sections: {', '.join(unused_sections)}"
             )
 
-        # Check configurtion
-        self._check(filename)
+        # Check configuration
+        self._check(filename, ptd_device_type)
 
-    def _check(self, filename: str) -> None:
+    def _check(self, filename: str, ptd_device_type: int) -> None:
         path = Path(self.ptd_logfile)
         if not (path.parent.exists()):
             exit_with_error_msg(
@@ -319,6 +326,19 @@ class ServerConfig:
             exit_with_error_msg(
                 f"The PTDaemon port {self.ptd_port} is already occupied."
             )
+
+        if ptd_device_type in MULTICHANNEL_DEVICES:
+            if not self.ptd_channel or (
+                self.ptd_channel and len(self.ptd_channel) != 2
+            ):
+                exit_with_error_msg(
+                    f"{filename}: 'channel' value should consist of two numbers for a multichannel device {ptd_device_type}."
+                )
+        else:
+            if self.ptd_channel and len(self.ptd_channel) != 1:
+                exit_with_error_msg(
+                    f"{filename}: 'channel' value should consist of one number or be disabled for a 1-channel device {ptd_device_type}."
+                )
 
 
 class Ptd:
@@ -801,9 +821,9 @@ class Session:
                 channels_amount = 0
 
                 if self._server._config.ptd_channel is not None:
-                    start_channel = int(self._server._config.ptd_channel[0])
+                    start_channel = self._server._config.ptd_channel[0]
                     if len(self._server._config.ptd_channel) == 2:
-                        channels_amount = int(self._server._config.ptd_channel[1])
+                        channels_amount = self._server._config.ptd_channel[1]
 
                 self._maxVolts, self._maxAmps = max_volts_amps(
                     self._server._config.ptd_logfile,
