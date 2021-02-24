@@ -450,42 +450,6 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
         ), f"Expected multichannel mode for {SUPPORTED_MODEL[dev_num]}, but got 1-channel."
 
 
-def check_mlperf_log_summary(path: str) -> None:
-    """Check that performance for ranging and testing mode is comparable"""
-    loadgen_summ_path_r = os.path.join(path, "ranging", "mlperf_log_summary.txt")
-    loadgen_summ_path_t = os.path.join(path, "testing", "mlperf_log_summary.txt")
-
-    def get_completed_samples_per_second(path: str) -> Optional[float]:
-        performance = None
-        with open(path, "r") as file:
-            for line in file:
-                performance_o = re.search(
-                    "(?<=Completed samples per second    :).+$", line
-                )
-                if performance_o is None:
-                    continue
-                performance = float(performance_o.group(0).strip())
-                break
-        return performance
-
-    performance_r = get_completed_samples_per_second(loadgen_summ_path_r)
-    assert (
-        performance_r is not None
-    ), "ranging/loadgen_log_summary.txt: Completed samples per second value is not found."
-
-    performance_t = get_completed_samples_per_second(loadgen_summ_path_t)
-    assert (
-        performance_t is not None
-    ), "testing/loadgen_log_summary.txt: Completed samples per second value is not found."
-
-    performance_comparison = abs(performance_r - performance_t) / performance_r
-    performance_comparison_in_percent = performance_comparison * 100
-
-    assert (
-        performance_comparison_in_percent < 1
-    ), "loadgen_log_summary.txt: Performance in testing mode differs from performance in ranging mode by more than 1 percent."
-
-
 def check_with_logging(check_name: str, check: Callable[[], None]) -> bool:
     try:
         check()
@@ -513,7 +477,6 @@ def check(path: str, sources_path: str) -> int:
         "Check results checksum": lambda: results_check(server, client, path),
         "Check errors and warnings from PTD logs": lambda: check_ptd_logs(server, path),
         "Check PTD configuration": lambda: check_ptd_config(server),
-        "Check mlperf log summary": lambda: check_mlperf_log_summary(path),
     }
 
     result = True
