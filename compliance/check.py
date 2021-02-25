@@ -45,24 +45,24 @@ SUPPORTED_MODEL = {
 }
 
 RESULT_PATHS_C = [
-    "client.log",
+    "power/client.log",
     "ranging/mlperf_log_accuracy.json",
     "ranging/mlperf_log_detail.txt",
     "ranging/mlperf_log_summary.txt",
     "ranging/mlperf_log_trace.json",
-    "testing/mlperf_log_accuracy.json",
-    "testing/mlperf_log_detail.txt",
-    "testing/mlperf_log_summary.txt",
-    "testing/mlperf_log_trace.json",
+    "run_1/mlperf_log_accuracy.json",
+    "run_1/mlperf_log_detail.txt",
+    "run_1/mlperf_log_summary.txt",
+    "run_1/mlperf_log_trace.json",
 ]
 
 RESULT_PATHS_S = [
-    "client.json",
-    "client.log",
-    "ptd_logs.txt",
+    "power/client.json",
+    "power/client.log",
+    "power/ptd_logs.txt",
     "ranging/spl.txt",
-    "server.log",
-    "testing/spl.txt",
+    "power/server.log",
+    "run_1/spl.txt",
 ]
 
 RESULT_PATHS = RESULT_PATHS_C + RESULT_PATHS_S
@@ -334,7 +334,7 @@ def results_check(
     results_c = client_sd.json_object["results"]
 
     results_without_server_json = results.copy()
-    results_without_server_json.pop("server.json")
+    results_without_server_json.pop("power/server.json")
 
     compare_dicts(
         results_s,
@@ -371,7 +371,7 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     stop_ranging_time = None
     ranging_mark = f"{server_sd.json_object['session_name']}_ranging"
 
-    with open(os.path.join(path, "ptd_logs.txt"), "r") as f:
+    with open(os.path.join(path, "power/ptd_logs.txt"), "r") as f:
         ptd_log_lines = f.readlines()
 
     def get_time(line: str) -> Decimal:
@@ -490,8 +490,8 @@ def check_with_logging(check_name: str, check: Callable[[], None]) -> bool:
 
 
 def check(path: str, sources_path: str) -> int:
-    client = SessionDescriptor(os.path.join(path, "client.json"))
-    server = SessionDescriptor(os.path.join(path, "server.json"))
+    client = SessionDescriptor(os.path.join(path, "power/client.json"))
+    server = SessionDescriptor(os.path.join(path, "power/server.json"))
 
     check_with_description = {
         "Check client sources checksum": lambda: sources_check(client, sources_path),
