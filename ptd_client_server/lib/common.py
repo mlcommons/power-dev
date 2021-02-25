@@ -37,11 +37,11 @@ MAGIC_SERVER = f"mlcommons/power server v{PROTO_VERSION}"
 
 
 FETCH_FILES_LIST = [
-    "ptd_logs.txt",
+    "power/ptd_logs.txt",
     "ranging/spl.txt",
-    "server.json",
-    "server.log",
-    "testing/spl.txt",
+    "power/server.json",
+    "power/server.log",
+    "run_1/spl.txt",
 ]
 
 

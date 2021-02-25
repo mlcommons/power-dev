@@ -234,11 +234,13 @@ def main() -> None:
 
     common.log_sources()
     out_dir = os.path.join(args.output, session)
+    power_dir = os.path.join(args.output, session, "power")
     os.mkdir(out_dir)
+    os.mkdir(power_dir)
 
     for mode in ["ranging", "testing"]:
         logging.info(f"Running workload in {mode} mode")
-        out = os.path.join(out_dir, mode)
+        out = os.path.join(out_dir, "run_1" if mode == "testing" else mode)
 
         sync_check()
 
@@ -283,17 +285,17 @@ def main() -> None:
 
     logging.info("Done runs")
 
-    common.log_redirect.stop(os.path.join(out_dir, "client.log"))
+    client_log_path = os.path.join(power_dir, "client.log")
+    common.log_redirect.stop(client_log_path)
 
-    command.upload(
-        f"session,{session},upload,client.log", os.path.join(out_dir, "client.log")
-    )
+    command.upload(f"session,{session},upload,client.log", client_log_path)
 
     summary.hash_results(out_dir)
-    summary.save(os.path.join(out_dir, "client.json"))
-    command.upload(
-        f"session,{session},upload,client.json", os.path.join(out_dir, "client.json")
-    )
+
+    client_json_path = os.path.join(power_dir, "client.json")
+    summary.save(client_json_path)
+
+    command.upload(f"session,{session},upload,client.json", client_json_path)
 
     command(f"session,{session},done", check=True)
 

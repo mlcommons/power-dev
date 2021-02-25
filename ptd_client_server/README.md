@@ -291,17 +291,18 @@ After a successful run, you'll see these new files and directories on the server
 D:\ptd-logs
 ├── … (old entries skipped)
 └── 2020-12-28_15-20-52_mylabel
-    ├── client.json                      ← client summary
-    ├── client.log                       ← client stdout log
-    ├── ptd_logs.txt                     ← ptdaemon stdout log
+    ├── power
+    │   ├── client.json                  ← client summary
+    │   ├── client.log                   ← client stdout log
+    │   ├── ptd_logs.txt                 ← ptdaemon stdout log
+    │   ├── server.json                  ← server summary
+    │   └── server.log                   ← server stdout log
     ├── ranging
     │   ├── mlperf_log_accuracy.json   ┐ ← loadgen log, if --send-logs is used.
     │   ├── mlperf_log_detail.txt      │   Produced by the workload script on
     │   ├── mlperf_log_summary.txt     │   the client.
     │   ├── mlperf_log_trace.json      ┘
     │   └── spl.txt                      ← power log
-    ├── server.json                      ← server summary
-    ├── server.log                       ← server stdout log
     └── testing
         ├── mlperf_log_accuracy.json   ┐
         ├── mlperf_log_detail.txt      │ ← loadgen log (same as above)

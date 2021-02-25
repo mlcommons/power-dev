@@ -642,7 +642,7 @@ class Server:
                         result = self.session.upload(Mode.TESTING, fname)
                     elif cmd[1] in ("client.json", "client.log"):
                         shutil.copyfile(
-                            fname, os.path.join(self.session.log_dir_path, cmd[1])
+                            fname, os.path.join(self.session.power_logs, cmd[1])
                         )
                         result = True
                     else:
@@ -677,6 +677,7 @@ class Server:
             common.log_redirect.stop()
             return
 
+        power_logs = self.session.power_logs
         log_dir_path = self.session.log_dir_path
         ptd_messages = self.session._ptd._messages
         session, self.session = self.session, None
@@ -685,12 +686,12 @@ class Server:
         try:
             session.drop()
         finally:
-            common.log_redirect.stop(os.path.join(log_dir_path, "server.log"))
+            common.log_redirect.stop(os.path.join(power_logs, "server.log"))
 
         if summary is not None:
             summary.ptd_messages = ptd_messages
             summary.hash_results(log_dir_path)
-            summary.save(os.path.join(log_dir_path, "server.json"))
+            summary.save(os.path.join(power_logs, "server.json"))
 
     def close(self) -> None:
         self._drop_session()
@@ -755,8 +756,10 @@ class Session:
         self._id: str = timestamp + "_" + label if label != "" else timestamp
         self.log_dir_path = os.path.join(self._server._config.out_dir, self._id)
         os.mkdir(self.log_dir_path)
+        self.power_logs = os.path.join(self._server._config.out_dir, self._id, "power")
+        os.mkdir(self.power_logs)
         self._ptd = Ptd(
-            server._config.ptd_command, server._config.ptd_port, self.log_dir_path
+            server._config.ptd_command, server._config.ptd_port, self.power_logs
         )
 
         # State
@@ -865,7 +868,7 @@ class Session:
         if mode == Mode.TESTING and self._state == SessionState.TESTING:
             self._state = SessionState.TESTING_DONE
             self._ptd.stop()
-            dirname = os.path.join(self.log_dir_path, "testing")
+            dirname = os.path.join(self.log_dir_path, "run_1")
             os.mkdir(dirname)
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
                 f.write(
@@ -882,7 +885,7 @@ class Session:
             dirname = os.path.join(self.log_dir_path, "ranging")
             return self._extract(fname, dirname)
         if mode == Mode.TESTING and self._state == SessionState.TESTING_DONE:
-            dirname = os.path.join(self.log_dir_path, "testing")
+            dirname = os.path.join(self.log_dir_path, "run_1")
             return self._extract(fname, dirname)
 
         # Unexpected state
