@@ -58,6 +58,11 @@ class CommandSender:
         logging.info(f"Got response: {response!r}")
         self._summary.message((command, time_command), (response, time_response))
 
+    def download(self, command: str, fname: str) -> None:
+        logging.info(f"Fetching file {fname!r}")
+        self._server.send(command)
+        self._server.recv_file(fname)
+
 
 def check_paths(loadgen_logs: str, output: str, force: bool) -> None:
     loadgen_logs_dir = os.path.abspath(loadgen_logs)
@@ -146,6 +151,9 @@ def main() -> None:
     parser.add_argument(
         "-s", "--send-logs", action="store_true",
         help="send loadgen logs to the server")
+    parser.add_argument(
+        "-F", "--fetch-logs", action="store_true",
+        help="fetch logs from the server")
     parser.add_argument(
         "-f", "--force", action="store_true",
         help="force remove loadgen logs directory (INDIR)")
@@ -288,5 +296,11 @@ def main() -> None:
     )
 
     command(f"session,{session},done", check=True)
+
+    if args.fetch_logs:
+        for fname in common.FETCH_FILES_LIST:
+            command.download(
+                f"download,{session},{fname}", os.path.join(out_dir, fname)
+            )
 
     logging.info("Successful exit")

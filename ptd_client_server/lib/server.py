@@ -516,12 +516,15 @@ class Server:
         self._config = config
         self._stop = False
         self._summary: Optional[summarylib.Summary] = None
+        self._last_session: Optional[str] = None
+        self._last_session_dir_path: Optional[str] = None
 
     def handle_connection(self, p: common.Proto) -> None:
         p.enable_keepalive()
         self._summary = summarylib.Summary()
         self._summary.ptd_config = self._config.ptd_summary
         self._summary.debug = _debug
+        self._last_session = self._last_session_dir_path = None
 
         common.log_redirect.start()
         with common.sig:
@@ -555,6 +558,9 @@ class Server:
                     logging.exception("Got an exception")
                     reply = "Error: exception"
 
+                if reply is None:
+                    continue
+
                 if len(reply) < 1000:
                     logging.info(f"Sending reply to client {reply!r}")
                 else:
@@ -574,7 +580,9 @@ class Server:
                 logging.info("Stopping the server")
                 exit(0)
 
-    def _handle_cmd(self, cmd: str, p: common.Proto) -> str:
+            self._last_session = self._last_session_dir_path = None
+
+    def _handle_cmd(self, cmd: str, p: common.Proto) -> Optional[str]:
         cmd = cmd.split(",")
         if len(cmd) == 0:
             return "..."
@@ -597,6 +605,8 @@ class Server:
             self._summary.server_uuid = uuid.uuid4()
             self.session = Session(self, cmd[1])
             self._summary.session_name = self.session._id
+            self._last_session = self.session._id
+            self._last_session_dir_path = self.session.log_dir_path
             return f"OK {self.session._id},{self._summary.server_uuid}"
         if cmd[0] == "session" and len(cmd) >= 3:
             if self.session is None or (self.session._id != cmd[1] and "*" != cmd[1]):
@@ -650,6 +660,15 @@ class Server:
                 return "OK"
 
             return "Error Unknown session command"
+
+        if (
+            cmd[0] == "download"
+            and cmd[1] == self._last_session
+            and cmd[2] in common.FETCH_FILES_LIST
+        ):
+            assert self._last_session_dir_path is not None
+            p.send_file(os.path.join(self._last_session_dir_path, cmd[2]))
+            return None
 
         return "Error"
 
