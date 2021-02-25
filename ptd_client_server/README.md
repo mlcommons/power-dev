@@ -303,7 +303,7 @@ D:\ptd-logs
     │   ├── mlperf_log_summary.txt     │   the client.
     │   ├── mlperf_log_trace.json      ┘
     │   └── spl.txt                      ← power log
-    └── testing
+    └── run_1
         ├── mlperf_log_accuracy.json   ┐
         ├── mlperf_log_detail.txt      │ ← loadgen log (same as above)
         ├── mlperf_log_summary.txt     │
