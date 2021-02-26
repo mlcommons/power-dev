@@ -24,6 +24,7 @@ import re
 import sys
 import time
 import uuid
+import dateutil.parser
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
 ptd_client_server_dir = os.path.join(os.path.dirname(current_dir), "ptd_client_server")
@@ -46,13 +47,16 @@ SUPPORTED_MODEL = {
 
 RESULT_PATHS_C = [
     "power/client.log",
-    "ranging/mlperf_log_accuracy.json",
     "ranging/mlperf_log_detail.txt",
     "ranging/mlperf_log_summary.txt",
-    "ranging/mlperf_log_trace.json",
-    "run_1/mlperf_log_accuracy.json",
     "run_1/mlperf_log_detail.txt",
     "run_1/mlperf_log_summary.txt",
+]
+
+OPTIONAL_RESULT_PATHS_C = [
+    "ranging/mlperf_log_accuracy.json",
+    "ranging/mlperf_log_trace.json",
+    "run_1/mlperf_log_accuracy.json",
     "run_1/mlperf_log_trace.json",
 ]
 
@@ -228,8 +232,13 @@ def uuid_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> No
     ), "'server uuid' is not equal."
 
 
-def phases_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> None:
-    """Check that the time difference between corresponding checkpoint values from client.json and server.json is less than 200 ms."""
+def phases_check(
+    client_sd: SessionDescriptor, server_sd: SessionDescriptor, path: str
+) -> None:
+    """Check that the time difference between corresponding checkpoint values from client.json and server.json is less than 200 ms.
+       Check that the loadgen timestamps are within workload time interval.
+       Check that the duration of loadgen test for the ranging mode is comparable with duration of loadgen test for the testing mode.
+    """
     phases_ranging_c = client_sd.json_object["phases"]["ranging"]
     phases_testing_c = client_sd.json_object["phases"]["testing"]
     phases_ranging_s = server_sd.json_object["phases"]["ranging"]
@@ -251,28 +260,72 @@ def phases_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> 
         duration_diff = abs(range_duration - test_duration) / max(
             range_duration, test_duration
         )
-        duration_diff_percent = duration_diff * 100
 
         assert (
-            duration_diff_percent < 5
-        ), "Duration of ranging mode differs from the duration of testing mode by more than 5 percent"
+            duration_diff < 0.05
+        ), "Duration of the ranging mode differs from the duration of testing mode by more than 5 percent"
 
-    # Compare test duration using client.json and unix time.
-    # It should be enough because phases values from client.json and server.json have not significant differences.
-    ranging_duration = phases_ranging_c[2][0] - phases_ranging_c[1][0]
-    testing_duration = phases_testing_c[2][0] - phases_testing_c[1][0]
+    def get_test_duration_from_mlperf_log_detail(file: str) -> Tuple[Decimal, Decimal]:
+        system_begin_dt = None
+        system_end_dt = None
+        with open(file) as f:
+            for line in f:
+                if re.search("power_begin", line.lower()):
+                    system_begin_dt_o = re.search(
+                        "(\d*-\d*-\d* \d*:\d*:\d*\.\d*)", line
+                    )
+                    if (
+                        system_begin_dt_o is not None
+                        and system_begin_dt_o.group(1) is not None
+                    ):
+                        system_begin_dt = dateutil.parser.parse(
+                            system_begin_dt_o.group(1)
+                        )
+                elif re.search("power_end", line.lower()):
+                    system_end_dt_o = re.search("(\d*-\d*-\d* \d*:\d*:\d*\.\d*)", line)
+                    if (
+                        system_end_dt_o is not None
+                        and system_end_dt_o.group(1) is not None
+                    ):
+                        system_end_dt = dateutil.parser.parse(system_end_dt_o.group(1))
+                if system_begin_dt and system_end_dt:
+                    break
 
-    compare_duration(ranging_duration, testing_duration)
+        assert (
+            system_begin_dt is not None
+        ), f"Can not get power_begin time from {file!r}"
+        assert system_end_dt is not None, f"Can not get power_end time from {file!r}"
 
-    ranging_duration = phases_ranging_c[2][1] - phases_ranging_c[1][1]
-    testing_duration = phases_testing_c[2][1] - phases_testing_c[1][1]
+        return (
+            Decimal(system_begin_dt.timestamp()),
+            Decimal(system_end_dt.timestamp()),
+        )
 
-    compare_duration(ranging_duration, testing_duration)
+    def compare_time_boundaries(
+        begin: Decimal, end: Decimal, phases: List[Any], mode: str
+    ) -> None:
+        assert (
+            phases[1][0] < begin
+        ), f"Loadgen test started before workload was running in {mode} mode."
+        assert (
+            end < phases[2][0]
+        ), f"Loadgen test finished after workload was running in {mode} mode."
 
-    ranging_duration = phases_ranging_s[2][1] - phases_ranging_s[1][1]
-    testing_duration = phases_testing_s[2][1] - phases_testing_s[1][1]
+    system_begin_r, system_end_r = get_test_duration_from_mlperf_log_detail(
+        os.path.join(path, "ranging", "mlperf_log_detail.txt")
+    )
 
-    compare_duration(ranging_duration, testing_duration)
+    system_begin_t, system_end_t = get_test_duration_from_mlperf_log_detail(
+        os.path.join(path, "run_1", "mlperf_log_detail.txt")
+    )
+
+    compare_time_boundaries(system_begin_r, system_end_r, phases_ranging_c, "ranging")
+    compare_time_boundaries(system_begin_t, system_end_t, phases_testing_c, "testing")
+
+    ranging_duration_d = system_end_r - system_begin_r
+    testing_duration_d = system_end_t - system_begin_t
+
+    compare_duration(ranging_duration_d, testing_duration_d)
 
 
 def session_name_check(
@@ -326,23 +379,32 @@ def results_check(
     server_sd: SessionDescriptor, client_sd: SessionDescriptor, result_path: str
 ) -> None:
     """Calculate the checksum for result files. Compare it with the checksums of the results from server.json.
-       Compare results checksum from client.json and server.json.
        Check that results from client.json and server.json have no extra and absent files.
+       Compare that results files from client.json and server.json with have the same checksum.
     """
     results = dict(source_hashes.hash_dir(result_path))
     results_s = server_sd.json_object["results"]
     results_c = client_sd.json_object["results"]
 
-    results_without_server_json = results.copy()
-    results_without_server_json.pop("power/server.json")
+    results.pop("power/server.json")
+
+    def remove_optional_path(res: Dict[str, str]) -> None:
+        for path in OPTIONAL_RESULT_PATHS_C:
+            res.pop(path, "empty")
+
+    remove_optional_path(results_s)
+    remove_optional_path(results_c)
+    remove_optional_path(results)
 
     compare_dicts(
         results_s,
-        results_without_server_json,
-        f"{server_sd.path} 'sources' checksum values and calculated {result_path} content checksum comparison:\n",
+        results,
+        f"{server_sd.path} 'results' checksum values and calculated {result_path} content checksum comparison:\n",
     )
 
-    def result_files_compare(res, ref_res, path):
+    def result_files_compare(
+        res: Dict[str, str], ref_res: List[str], path: str
+    ) -> None:
         extra_files = set(res.keys()) - set(ref_res)
         assert (
             len(extra_files) == 0
@@ -499,7 +561,7 @@ def check(path: str, sources_path: str) -> int:
         "Check PTD commands and replies": lambda: ptd_messages_check(server),
         "Check UUID": lambda: uuid_check(client, server),
         "Check session name": lambda: session_name_check(client, server),
-        "Check time difference": lambda: phases_check(client, server),
+        "Check time difference": lambda: phases_check(client, server, path),
         "Check client server messages": lambda: messages_check(client, server),
         "Check results checksum": lambda: results_check(server, client, path),
         "Check errors and warnings from PTD logs": lambda: check_ptd_logs(server, path),
