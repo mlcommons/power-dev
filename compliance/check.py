@@ -46,13 +46,16 @@ SUPPORTED_MODEL = {
 
 RESULT_PATHS_C = [
     "power/client.log",
-    "ranging/mlperf_log_accuracy.json",
     "ranging/mlperf_log_detail.txt",
     "ranging/mlperf_log_summary.txt",
-    "ranging/mlperf_log_trace.json",
-    "run_1/mlperf_log_accuracy.json",
     "run_1/mlperf_log_detail.txt",
     "run_1/mlperf_log_summary.txt",
+]
+
+OPTIONAL_RESULT_PATHS_C = [
+    "ranging/mlperf_log_accuracy.json",
+    "ranging/mlperf_log_trace.json",
+    "run_1/mlperf_log_accuracy.json",
     "run_1/mlperf_log_trace.json",
 ]
 
@@ -326,23 +329,32 @@ def results_check(
     server_sd: SessionDescriptor, client_sd: SessionDescriptor, result_path: str
 ) -> None:
     """Calculate the checksum for result files. Compare it with the checksums of the results from server.json.
-       Compare results checksum from client.json and server.json.
        Check that results from client.json and server.json have no extra and absent files.
+       Compare that results files from client.json and server.json with have the same checksum.
     """
     results = dict(source_hashes.hash_dir(result_path))
     results_s = server_sd.json_object["results"]
     results_c = client_sd.json_object["results"]
 
-    results_without_server_json = results.copy()
-    results_without_server_json.pop("power/server.json")
+    results.pop("power/server.json")
+
+    def remove_optional_path(res: Dict[str, str]) -> None:
+        for path in OPTIONAL_RESULT_PATHS_C:
+            res.pop(path, "empty")
+
+    remove_optional_path(results_s)
+    remove_optional_path(results_c)
+    remove_optional_path(results)
 
     compare_dicts(
         results_s,
-        results_without_server_json,
-        f"{server_sd.path} 'sources' checksum values and calculated {result_path} content checksum comparison:\n",
+        results,
+        f"{server_sd.path} 'results' checksum values and calculated {result_path} content checksum comparison:\n",
     )
 
-    def result_files_compare(res, ref_res, path):
+    def result_files_compare(
+        res: Dict[str, str], ref_res: List[str], path: str
+    ) -> None:
         extra_files = set(res.keys()) - set(ref_res)
         assert (
             len(extra_files) == 0
