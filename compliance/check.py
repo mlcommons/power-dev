@@ -382,6 +382,7 @@ def results_check(
     results_s = server_sd.json_object["results"]
     results_c = client_sd.json_object["results"]
 
+    # TODO: server.json checksum
     results.pop("power/server.json")
 
     def remove_optional_path(res: Dict[str, str]) -> None:
@@ -392,8 +393,21 @@ def results_check(
     remove_optional_path(results_c)
     remove_optional_path(results)
 
-    compare_dicts(
+    compare_dicts_values(
         results_s,
+        results_c,
+        f"{server_sd.path} and {client_sd.path} results checksum comparison",
+    )
+    compare_dicts_values(
+        results_c,
+        results_s,
+        f"{server_sd.path} and {client_sd.path} results checksum comparison",
+    )
+
+    result_c_s = {**results_c, **results_s}
+
+    compare_dicts(
+        result_c_s,
         results,
         f"{server_sd.path} 'results' checksum values and calculated {result_path} content checksum comparison:\n",
     )
@@ -411,14 +425,8 @@ def results_check(
             len(absent_files) == 0
         ), f"There are absent files {', '.join(absent_files)!r} in the results of {path}"
 
-    result_files_compare(results_s, RESULT_PATHS, server_sd.path)
+    result_files_compare(result_c_s, RESULT_PATHS, server_sd.path)
     result_files_compare(results_c, RESULT_PATHS_C, client_sd.path)
-
-    compare_dicts_values(
-        results_c,
-        results_s,
-        f"{server_sd.path} and {client_sd.path} results checksum comparison",
-    )
 
 
 def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
