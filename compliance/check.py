@@ -39,8 +39,8 @@ SUPPORTED_VERSION = ["1.9.1", "1.9.2"]
 SUPPORTED_MODEL = {
     8: "YokogawaWT210",
     49: "YokogawaWT310",
-    52: "YokogawaWT333E",
-    77: "YokogawaWT333E",
+    52: "YokogawaWT330E",
+    77: "YokogawaWT330E",
 }
 
 RESULT_PATHS_C = [
