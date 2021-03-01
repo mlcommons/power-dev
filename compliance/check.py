@@ -14,7 +14,7 @@
 # limitations under the License.
 # =============================================================================
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Tuple, Set, Any, Optional, Callable
 import argparse
@@ -22,9 +22,7 @@ import json
 import os
 import re
 import sys
-import time
 import uuid
-import dateutil.parser
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
 ptd_client_server_dir = os.path.join(os.path.dirname(current_dir), "ptd_client_server")
@@ -41,8 +39,8 @@ SUPPORTED_VERSION = ["1.9.1", "1.9.2"]
 SUPPORTED_MODEL = {
     8: "YokogawaWT210",
     49: "YokogawaWT310",
-    52: "YokogawaWT333E",
-    77: "YokogawaWT333E",
+    52: "YokogawaWT330E",
+    77: "YokogawaWT330E",
 }
 
 RESULT_PATHS_C = [
@@ -77,8 +75,16 @@ TESTING_NODE = "testing"
 
 COMMON_ERROR = "Can't evaluate uncertainty of this sample!"
 COMMON_WARNING = "Uncertainty unknown for the last measurement sample!"
-DATE_REGEXP = "(^\d\d-\d\d-\d\d\d\d \d\d:\d\d:\d\d.\d\d\d)"
-DATA_FORMAT = "%m-%d-%Y %H:%M:%S.%f"
+
+
+def get_time_from_line(
+    line: str, data_regexp: str, file: str, timezone_offset: int
+) -> float:
+    log_time_str = re.search(data_regexp, line)
+    if log_time_str and log_time_str.group(0):
+        log_datetime = datetime.strptime(log_time_str.group(0), "%m-%d-%Y %H:%M:%S.%f")
+        return log_datetime.replace(tzinfo=timezone.utc).timestamp() + timezone_offset
+    raise LineWithoutTimeStamp(f"{line.strip()!r} in {file}.")
 
 
 class SessionDescriptor:
@@ -256,7 +262,7 @@ def phases_check(
     comapre_time(phases_ranging_c, phases_ranging_s, RANGING_MODE)
     comapre_time(phases_testing_c, phases_testing_s, TESTING_NODE)
 
-    def compare_duration(range_duration: Decimal, test_duration: Decimal) -> None:
+    def compare_duration(range_duration: float, test_duration: float) -> None:
         duration_diff = abs(range_duration - test_duration) / max(
             range_duration, test_duration
         )
@@ -265,58 +271,48 @@ def phases_check(
             duration_diff < 0.05
         ), "Duration of the ranging mode differs from the duration of testing mode by more than 5 percent"
 
-    def get_test_duration_from_mlperf_log_detail(file: str) -> Tuple[Decimal, Decimal]:
-        system_begin_dt = None
-        system_end_dt = None
+    def get_begin_end_time_from_mlperf_log_detail(path: str) -> Tuple[float, float]:
+        system_begin = None
+        system_end = None
+
+        timezone_offset = int(server_sd.json_object["timezone"])
+
+        file = os.path.join(path, "mlperf_log_detail.txt")
+
         with open(file) as f:
             for line in f:
                 if re.search("power_begin", line.lower()):
-                    system_begin_dt_o = re.search(
-                        "(\d*-\d*-\d* \d*:\d*:\d*\.\d*)", line
+                    system_begin = get_time_from_line(
+                        line, "(\d*-\d*-\d* \d*:\d*:\d*\.\d*)", file, timezone_offset,
                     )
-                    if (
-                        system_begin_dt_o is not None
-                        and system_begin_dt_o.group(1) is not None
-                    ):
-                        system_begin_dt = dateutil.parser.parse(
-                            system_begin_dt_o.group(1)
-                        )
                 elif re.search("power_end", line.lower()):
-                    system_end_dt_o = re.search("(\d*-\d*-\d* \d*:\d*:\d*\.\d*)", line)
-                    if (
-                        system_end_dt_o is not None
-                        and system_end_dt_o.group(1) is not None
-                    ):
-                        system_end_dt = dateutil.parser.parse(system_end_dt_o.group(1))
-                if system_begin_dt and system_end_dt:
+                    system_end = get_time_from_line(
+                        line, "(\d*-\d*-\d* \d*:\d*:\d*\.\d*)", file, timezone_offset,
+                    )
+                if system_begin and system_end:
                     break
 
-        assert (
-            system_begin_dt is not None
-        ), f"Can not get power_begin time from {file!r}"
-        assert system_end_dt is not None, f"Can not get power_end time from {file!r}"
+        assert system_begin is not None, f"Can not get power_begin time from {file!r}"
+        assert system_end is not None, f"Can not get power_end time from {file!r}"
 
-        return (
-            Decimal(system_begin_dt.timestamp()),
-            Decimal(system_end_dt.timestamp()),
-        )
+        return system_begin, system_end
 
     def compare_time_boundaries(
-        begin: Decimal, end: Decimal, phases: List[Any], mode: str
+        begin: float, end: float, phases: List[Any], mode: str
     ) -> None:
         assert (
-            phases[1][0] < begin
-        ), f"Loadgen test started before workload was running in {mode} mode."
+            phases[1][0] < begin < phases[2][0]
+        ), f"Loadgen test begin time is not within {mode} mode time interval."
         assert (
-            end < phases[2][0]
-        ), f"Loadgen test finished after workload was running in {mode} mode."
+            phases[1][0] < end < phases[2][0]
+        ), f"Loadgen test end time is not within {mode} mode time interval."
 
-    system_begin_r, system_end_r = get_test_duration_from_mlperf_log_detail(
-        os.path.join(path, "ranging", "mlperf_log_detail.txt")
+    system_begin_r, system_end_r = get_begin_end_time_from_mlperf_log_detail(
+        os.path.join(path, "ranging")
     )
 
-    system_begin_t, system_end_t = get_test_duration_from_mlperf_log_detail(
-        os.path.join(path, "run_1", "mlperf_log_detail.txt")
+    system_begin_t, system_end_t = get_begin_end_time_from_mlperf_log_detail(
+        os.path.join(path, "run_1")
     )
 
     compare_time_boundaries(system_begin_r, system_end_r, phases_ranging_c, "ranging")
@@ -433,22 +429,18 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     stop_ranging_time = None
     ranging_mark = f"{server_sd.json_object['session_name']}_ranging"
 
-    with open(os.path.join(path, "power/ptd_logs.txt"), "r") as f:
+    file_path = os.path.join(path, "power", "ptd_logs.txt")
+    date_regexp = "(^\d\d-\d\d-\d\d\d\d \d\d:\d\d:\d\d.\d\d\d)"
+    timezone_offset = int(server_sd.json_object["timezone"])
+
+    with open(file_path, "r") as f:
         ptd_log_lines = f.readlines()
-
-    def get_time(line: str) -> Decimal:
-        log_time_str = re.search(DATE_REGEXP, line)
-        if log_time_str and log_time_str.group(0):
-            log_datetime = datetime.strptime(log_time_str.group(0), DATA_FORMAT)
-            return Decimal(log_datetime.timestamp())
-
-        raise LineWithoutTimeStamp(f"{line.strip()!r} in ptd_log.txt.")
 
     def find_common_problem(reg_exp: str, line: str, common_problem: str) -> None:
         problem_line = re.search(reg_exp, line)
 
         if problem_line and problem_line.group(0):
-            log_time = get_time(line)
+            log_time = get_time_from_line(line, date_regexp, file_path, timezone_offset)
             if start_ranging_time is None or stop_ranging_time is None:
                 raise Exception("Can not find ranging time in ptd_logs.txt.")
             if start_ranging_time < log_time < stop_ranging_time:
@@ -462,10 +454,10 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
 
     def get_msg_without_time(line: str) -> Optional[str]:
         try:
-            get_time(line)
+            get_time_from_line(line, date_regexp, file_path, timezone_offset)
         except LineWithoutTimeStamp:
             return line
-        msg_o = re.search(f"(?<={DATE_REGEXP}).+", line)
+        msg_o = re.search(f"(?<={date_regexp}).+", line)
         if msg_o is None:
             return None
         return msg_o.group(0).strip()
@@ -475,10 +467,14 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
         if msg is None:
             continue
         if (not start_ranging_time) and (start_ranging_line == msg):
-            start_ranging_time = get_time(line)
+            start_ranging_time = get_time_from_line(
+                line, date_regexp, file_path, timezone_offset
+            )
         if (not stop_ranging_time) and bool(start_ranging_time):
             if ": Completed test" == msg:
-                stop_ranging_time = get_time(line)
+                stop_ranging_time = get_time_from_line(
+                    line, date_regexp, file_path, timezone_offset
+                )
                 break
 
     if start_ranging_time is None or stop_ranging_time is None:
@@ -491,7 +487,9 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
         if msg_o is not None:
             try:
                 log_time = None
-                log_time = get_time(line)
+                log_time = get_time_from_line(
+                    line, date_regexp, file_path, timezone_offset
+                )
             except LineWithoutTimeStamp:
                 assert (
                     log_time is not None
