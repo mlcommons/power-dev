@@ -545,19 +545,26 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
         ), f"Expected multichannel mode for {SUPPORTED_MODEL[dev_num]}, but got 1-channel."
 
 
-def check_with_logging(check_name: str, check: Callable[[], None]) -> bool:
+def write_to_stdout_and_result_list(info: str, result_list: List["str"]):
+    print(info)
+    result_list.append(info)
+
+
+def check_with_logging(
+    check_name: str, check: Callable[[], None], result_list: List["str"]
+) -> bool:
     try:
         check()
     except Exception as e:
-        print(f"[ ] {check_name}")
-        print(f"\t{e}\n")
+        write_to_stdout_and_result_list(f"[ ] {check_name}", result_list)
+        write_to_stdout_and_result_list(f"\t{e}\n", result_list)
         return False
     else:
-        print(f"[x] {check_name}")
+        write_to_stdout_and_result_list(f"[x] {check_name}", result_list)
     return True
 
 
-def check(path: str, sources_path: str) -> int:
+def check(path: str, sources_path: str, log_file: str) -> int:
     client = SessionDescriptor(os.path.join(path, "power/client.json"))
     server = SessionDescriptor(os.path.join(path, "power/server.json"))
 
@@ -575,9 +582,16 @@ def check(path: str, sources_path: str) -> int:
     }
 
     result = True
+    final_msg_list: List[str] = []
 
     for description in check_with_description.keys():
-        result &= check_with_logging(description, check_with_description[description])
+        result &= check_with_logging(
+            description, check_with_description[description], final_msg_list
+        )
+
+    with open(log_file, "w") as f:
+        for msg in final_msg_list:
+            f.write(f"{msg}\n")
 
     return 0 if result is True else 1
 
@@ -591,6 +605,14 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    return_code = check(args.session_directory, args.sources_directory)
+    log_file = os.path.join(args.session_directory, "check.log")
+
+    if os.path.exists(log_file):
+        print(
+            f"{log_file} exists. Please remove 'check.log' before the next 'check.py' run."
+        )
+        exit(1)
+
+    return_code = check(args.session_directory, args.sources_directory, log_file)
 
     exit(return_code)
