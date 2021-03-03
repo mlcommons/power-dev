@@ -146,6 +146,7 @@ optional arguments:
   -p PORT, --port PORT            server port, defaults to 4950
   -l LABEL, --label LABEL         a label to include into the resulting directory name
   -s, --send-logs                 send loadgen logs to the server
+  -F, --fetch-logs                fetch logs from the server
   -f, --force                     force remove loadgen logs directory (INDIR)
   -S, --stop-server               stop the server after processing this client
 ```
@@ -355,37 +356,35 @@ Keepalive packets are sent each 2 seconds, and we consider the connection broken
 
 The directory [compilance] contains the compliance checker script that need to be run by the submitter in order to demonstrate a valid submission.
 ```
-usage: check.py [-h] session_directory sources_directory
-
+usage: check.py [-h] session_directory
 ```
 Usage example:
 ```
-python .\checker.py D:\ptd-logs\2020-12-28_15-20-52_mylabel_ranging\ ..\ptd_client_server\
+python .\checker.py D:\ptd-logs\2020-12-28_15-20-52_mylabel_ranging
 ```
 The expected structure of D:\ptd-logs\2020-12-28_15-20-52_mylabel_ranging\ is:
 ```
 D:\ptd-logs
 ├── … (old entries skipped)
 └── 2020-12-28_15-20-52_mylabel
-    ├── client.json
-    ├── client.log
-    ├── ptd_logs.txt
+    ├── power
+    │   ├── client.json
+    │   ├── client.log
+    │   ├── ptd_logs.txt
+    │   ├── server.json
+    │   └── server.log
     ├── ranging
-    │   ├── mlperf_log_accuracy.json
-    │   ├── mlperf_log_detail.txt
-    │   ├── mlperf_log_summary.txt
-    │   ├── mlperf_log_trace.json
-    │   └── spl.txt
-    ├── server.json
-    ├── server.log
-    └── testing
-        ├── mlperf_log_accuracy.json
+    │   ├── mlperf_log_detail.txt
+    │   ├── mlperf_log_summary.txt
+    │   └── spl.txt
+    └── run_1
         ├── mlperf_log_detail.txt
         ├── mlperf_log_summary.txt
-        ├── mlperf_log_trace.json
         └── spl.txt
 ```
-To get this structure on the server side you should use `--send-logs` option for client.py. On other hand, you can copy ranging and testing results from the client output folder manually.
+To get this structure on the server side you should use `--send-logs` option for client.py.
+To get this structure on the client side you should use `--fetch-logs` option for client.py.
+On other hand, you can get the such files structure manually joined client and server output results.
 If everything is fine you see the next messages after check.py run:
 ```
 [x] Check client sources checksum
@@ -395,7 +394,7 @@ If everything is fine you see the next messages after check.py run:
 [x] Check session name
 [x] Check time difference
 [x] Check client server messages
-[X] Check results checksum
+[x] Check results checksum
 [x] Check errors and warnings from PTD logs
 [x] Check PTD configuration
 ```
