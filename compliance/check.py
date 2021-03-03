@@ -549,6 +549,11 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
         ), f"Expected multichannel mode for {SUPPORTED_MODEL[dev_num]}, but got 1-channel."
 
 
+def debug_check(server_sd: SessionDescriptor) -> None:
+    """Check debug is disabled on server-side"""
+    assert server_sd.json_object.get("debug", False) is False, "Server was running in debug mode"
+
+
 def check_with_logging(check_name: str, check: Callable[[], None]) -> bool:
     try:
         check()
@@ -576,6 +581,7 @@ def check(path: str) -> int:
         "Check results checksum": lambda: results_check(server, client, path),
         "Check errors and warnings from PTD logs": lambda: check_ptd_logs(server, path),
         "Check PTD configuration": lambda: check_ptd_config(server),
+        "Check debug is disabled on server-side": lambda: debug_check(server),
     }
 
     result = True
