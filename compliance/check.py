@@ -138,12 +138,7 @@ def sources_check(sd: SessionDescriptor) -> None:
     with open("sources_checksums.json") as f:
         sources_sample = json.load(f)
 
-    absent_files = set(sources_sample.keys()) - set(s.keys())
-    assert (
-        len(absent_files) == 0
-    ), f"There is no checksum(s) for {', '.join(absent_files)!r} sources in {sd.path}"
-
-    compare_dicts_values(
+    compare_dicts(
         sources_sample,
         s,
         f"{sd.path} 'sources' values and 'sources_checksums.json' values comparison:\n",
