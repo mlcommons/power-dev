@@ -270,6 +270,7 @@ class ServerConfig:
         ptd_device_type: int = get("ptd", "deviceType", parse=int)
         ptd_interface_flag: str = get("ptd", "interfaceFlag")
         ptd_device_port: str = get("ptd", "devicePort")
+        ptd_board_num: Optional[int] = get("ptd", "gpibBoard", parse=int, fallback=None)
         # TODO: validate ptd_interface_flag?
         # TODO: validate ptd_device_type?
         self.ptd_logfile: str = get("ptd", "logfile")
@@ -280,6 +281,7 @@ class ServerConfig:
             self.ptd_logfile,
             "-p",
             str(self.ptd_port),
+            *([] if ptd_board_num is None else ["-b", str(ptd_board_num)]),
             *(
                 []
                 if self.ptd_channel is None
