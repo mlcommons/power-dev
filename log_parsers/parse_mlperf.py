@@ -697,7 +697,7 @@ def f_parse_Loadgen( p_dirin, p_fileout, p_custom_workloads ):
                 m_scenario = None
                 for m_line in m_file:
                     logger_prefix = ":::MLLOG "
-                    if m_line.starts_with(logger_prefix):
+                    if m_line.startswith(logger_prefix):
                         try:
                             m_line_json = json.loads(m_line[len(logger_prefix):])
                         except Exception as e:
@@ -710,9 +710,9 @@ def f_parse_Loadgen( p_dirin, p_fileout, p_custom_workloads ):
                             m_loadgen_start_dt = dateutil.parser.parse(m_line_value)
                             m_loadgen_begin_ts = int(m_line_json["time_ms"] * 1000000)
                         elif m_line_key == "power_begin":
-                            m_system_begin_dt = m_line_value
+                            m_system_begin_dt = dateutil.parser.parse(m_line_value)
                         elif m_line_key == "power_end":
-                            m_system_end_dt = m_line_value
+                            m_system_end_dt = dateutil.parser.parse(m_line_value)
                             m_loadgen_end_ts = int(m_line_json["time_ms"] * 1000000)
                         elif m_line_key == "effective_scenario":
                             m_scenario = m_line_value.lower()
