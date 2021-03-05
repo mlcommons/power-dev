@@ -135,7 +135,9 @@ def sources_check(sd: SessionDescriptor) -> None:
     """Compare the current checksum of the code against the standard checksum of the source code."""
     s = sd.json_object["sources"]
 
-    with open("sources_checksums.json") as f:
+    with open(
+        os.path.join(os.path.dirname(sys.argv[0]), "sources_checksums.json")
+    ) as f:
         sources_samples = json.load(f)
 
     assert s in sources_samples, f"{s} is not exists in 'sources_checksums.json'"
