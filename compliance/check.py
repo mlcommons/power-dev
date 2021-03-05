@@ -135,7 +135,7 @@ def sources_check(sd: SessionDescriptor) -> None:
     """Compare the current checksum of the code against the standard checksum of the source code."""
     s = sd.json_object["sources"]
 
-    with open("sources_checksums.json") as f:
+    with open(os.path.join(os.path.dirname(__file__), "sources_checksums.json")) as f:
         sources_sample = json.load(f)
 
     compare_dicts(
@@ -551,7 +551,9 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
 
 def debug_check(server_sd: SessionDescriptor) -> None:
     """Check debug is disabled on server-side"""
-    assert server_sd.json_object.get("debug", False) is False, "Server was running in debug mode"
+    assert (
+        server_sd.json_object.get("debug", False) is False
+    ), "Server was running in debug mode"
 
 
 def check_with_logging(check_name: str, check: Callable[[], None]) -> bool:
