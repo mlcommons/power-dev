@@ -136,13 +136,9 @@ def sources_check(sd: SessionDescriptor) -> None:
     s = sd.json_object["sources"]
 
     with open("sources_checksums.json") as f:
-        sources_sample = json.load(f)
+        sources_samples = json.load(f)
 
-    compare_dicts(
-        sources_sample,
-        s,
-        f"{sd.path} 'sources' values and 'sources_checksums.json' values comparison:\n",
-    )
+    assert s in sources_samples, f"{s} is not exists in 'sources_checksums.json'"
 
 
 def ptd_messages_check(sd: SessionDescriptor) -> None:
@@ -551,7 +547,14 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
 
 def debug_check(server_sd: SessionDescriptor) -> None:
     """Check debug is disabled on server-side"""
-    assert server_sd.json_object.get("debug", False) is False, "Server was running in debug mode"
+    assert (
+        server_sd.json_object.get("debug", False) is False
+    ), "Server was running in debug mode"
+
+
+def version_check() -> None:
+    """Only for master branch"""
+    raise Exception("using of not-yet released version of checker")
 
 
 def check_with_logging(check_name: str, check: Callable[[], None]) -> bool:
@@ -582,6 +585,7 @@ def check(path: str) -> int:
         "Check errors and warnings from PTD logs": lambda: check_ptd_logs(server, path),
         "Check PTD configuration": lambda: check_ptd_config(server),
         "Check debug is disabled on server-side": lambda: debug_check(server),
+        "Check release version": lambda: version_check(),
     }
 
     result = True
