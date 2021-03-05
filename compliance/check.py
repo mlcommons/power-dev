@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import uuid
+import json
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
 ptd_client_server_dir = os.path.join(os.path.dirname(current_dir), "ptd_client_server")
@@ -130,14 +131,17 @@ def compare_dicts(s1: Dict[str, str], s2: Dict[str, str], comment: str) -> None:
     compare_dicts_values(s1, s2, comment)
 
 
-def sources_check(sd: SessionDescriptor, sources_path: Optional[str] = None) -> None:
-    """Calculate sources checksums and compare them with sources checksums from the given json file."""
+def sources_check(sd: SessionDescriptor) -> None:
+    """Compare the current checksum of the code against the standard checksum of the source code."""
     s = sd.json_object["sources"]
-    calc_s = source_hashes.get_sources_checksum(sources_path)
+
+    with open("sources_checksums.json") as f:
+        sources_sample = json.load(f)
+
     compare_dicts(
+        sources_sample,
         s,
-        calc_s,
-        f"{sd.path} 'sources' values and calculated {sources_path} content comparison:\n",
+        f"{sd.path} 'sources' values and 'sources_checksums.json' values comparison:\n",
     )
 
 
@@ -545,6 +549,11 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
         ), f"Expected multichannel mode for {SUPPORTED_MODEL[dev_num]}, but got 1-channel."
 
 
+def debug_check(server_sd: SessionDescriptor) -> None:
+    """Check debug is disabled on server-side"""
+    assert server_sd.json_object.get("debug", False) is False, "Server was running in debug mode"
+
+
 def check_with_logging(check_name: str, check: Callable[[], None]) -> bool:
     try:
         check()
@@ -557,13 +566,13 @@ def check_with_logging(check_name: str, check: Callable[[], None]) -> bool:
     return True
 
 
-def check(path: str, sources_path: str) -> int:
+def check(path: str) -> int:
     client = SessionDescriptor(os.path.join(path, "power/client.json"))
     server = SessionDescriptor(os.path.join(path, "power/server.json"))
 
     check_with_description = {
-        "Check client sources checksum": lambda: sources_check(client, sources_path),
-        "Check server sources checksum": lambda: sources_check(server, sources_path),
+        "Check client sources checksum": lambda: sources_check(client),
+        "Check server sources checksum": lambda: sources_check(server),
         "Check PTD commands and replies": lambda: ptd_messages_check(server),
         "Check UUID": lambda: uuid_check(client, server),
         "Check session name": lambda: session_name_check(client, server),
@@ -572,6 +581,7 @@ def check(path: str, sources_path: str) -> int:
         "Check results checksum": lambda: results_check(server, client, path),
         "Check errors and warnings from PTD logs": lambda: check_ptd_logs(server, path),
         "Check PTD configuration": lambda: check_ptd_config(server),
+        "Check debug is disabled on server-side": lambda: debug_check(server),
     }
 
     result = True
@@ -586,11 +596,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Check PTD client-server session results"
     )
-    parser.add_argument("session_directory", help="directory with stored data")
-    parser.add_argument("sources_directory", help="sources directory")
+    parser.add_argument("session_directory", help="directory with session results data")
 
     args = parser.parse_args()
 
-    return_code = check(args.session_directory, args.sources_directory)
+    return_code = check(args.session_directory)
 
     exit(return_code)
