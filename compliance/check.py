@@ -132,7 +132,7 @@ def compare_dicts(s1: Dict[str, str], s2: Dict[str, str], comment: str) -> None:
 
 
 def sources_check(sd: SessionDescriptor) -> None:
-    """Compare the current checksum of the code against the standard checksum of the source code."""
+    """Compare the current checksum of the code from client.json or server.json against the standard checksum of the source code from sources_checksums.json."""
     s = sd.json_object["sources"]
 
     with open(os.path.join(os.path.dirname(__file__), "sources_checksums.json")) as f:
@@ -143,7 +143,7 @@ def sources_check(sd: SessionDescriptor) -> None:
 
 def ptd_messages_check(sd: SessionDescriptor) -> None:
     """Performs multiple checks:
-    - Check the version of the power meter.
+    - Check the ptd version number.
     - Check the device model.
     - Compare message replies with expected values.
     - Check that initial values set after the test is completed.
@@ -374,9 +374,9 @@ def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -
 def results_check(
     server_sd: SessionDescriptor, client_sd: SessionDescriptor, result_path: str
 ) -> None:
-    """Calculate the checksum for result files. Compare it with the checksums of the results from server.json.
+    """Calculate the checksum for result files. Compare them with the checksums list formed from joined results from server.json and client.json.
        Check that results from client.json and server.json have no extra and absent files.
-       Compare that results files from client.json and server.json with have the same checksum.
+       Compare that results files from client.json and server.json have the same checksum.
     """
     results = dict(source_hashes.hash_dir(result_path))
     results_s = server_sd.json_object["results"]

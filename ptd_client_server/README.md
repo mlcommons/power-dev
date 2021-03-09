@@ -404,6 +404,7 @@ If everything is fine you see the next messages after check.py run:
 [x] Check results checksum
 [x] Check errors and warnings from PTD logs
 [x] Check PTD configuration
+[x] Check debug is disabled on server-side
 ```
 
 [compilance]: ../compliance
