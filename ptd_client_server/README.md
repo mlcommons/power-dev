@@ -360,13 +360,13 @@ usage: check.py [-h] session_directory
 ```
 Usage example:
 ```
-python .\checker.py D:\ptd-logs\2020-12-28_15-20-52_mylabel_ranging
+python .\checker.py D:\ptd-logs\2021-03-01_15-59-52_loadgen
 ```
-The expected structure of D:\ptd-logs\2020-12-28_15-20-52_mylabel_ranging\ is:
+The expected structure of D:\ptd-logs\2021-03-01_15-59-52_loadgen is:
 ```
 D:\ptd-logs
 ├── … (old entries skipped)
-└── 2020-12-28_15-20-52_mylabel
+└── 2021-03-01_15-59-52_loadgen
     ├── power
     │   ├── client.json
     │   ├── client.log
@@ -382,6 +382,8 @@ D:\ptd-logs
         ├── mlperf_log_summary.txt
         └── spl.txt
 ```
+Directory with results example is [2021-03-01_15-59-52_loadgen].
+
 To get this structure on the server side you should use `--send-logs` option for client.py.
 To get this structure on the client side you should use `--fetch-logs` option for client.py.
 On other hand, you can get the such files structure manually joined client and server output results.
@@ -401,3 +403,4 @@ If everything is fine you see the next messages after check.py run:
 ```
 
 [compilance]: ../compliance
+[2021-03-01_15-59-52_loadgen]: https://github.com/mlcommons/power-dev/files/6116703/2021-03-01_15-59-52_loadgen.zip
