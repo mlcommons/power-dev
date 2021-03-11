@@ -138,7 +138,7 @@ def sources_check(sd: SessionDescriptor) -> None:
     with open(os.path.join(os.path.dirname(__file__), "sources_checksums.json")) as f:
         sources_samples = json.load(f)
 
-    assert s in sources_samples, f"{s} is not exists in 'sources_checksums.json'"
+    assert s in sources_samples, f"{s} do not exist in 'sources_checksums.json'"
 
 
 def ptd_messages_check(sd: SessionDescriptor) -> None:
