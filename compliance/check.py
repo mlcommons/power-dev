@@ -23,7 +23,6 @@ import os
 import re
 import sys
 import uuid
-import json
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
 ptd_client_server_dir = os.path.join(os.path.dirname(current_dir), "ptd_client_server")
