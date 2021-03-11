@@ -13,20 +13,28 @@
 # limitations under the License.
 # =============================================================================
 
+
+from . import common
+from . import summary as summarylib
+from . import time_sync
+from pathlib import Path
 import argparse
 import base64
 import logging
 import os
 import shutil
-import time
 import socket
 import subprocess
+import time
 import uuid
 import zipfile
 
-from . import common
-from . import summary as summarylib
-from . import time_sync
+LOADGEN_FILES = [
+    "mlperf_log_accuracy.json",
+    "mlperf_log_detail.txt",
+    "mlperf_log_summary.txt",
+    "mlperf_log_trace.json",
+]
 
 
 class CommandSender:
@@ -108,6 +116,22 @@ def create_zip(zip_filename: str, dirname: str) -> None:
                 filePath = os.path.join(folderName, filename)
                 zipPath = os.path.relpath(filePath, dirname)
                 zf.write(filePath, zipPath)
+
+
+def reorder_loadgen_files(path: str) -> None:
+    abs_path = path if os.path.isabs(path) else os.path.abspath(path)
+    for file in LOADGEN_FILES:
+        loadgen_result_file = list(Path(abs_path).rglob(file))
+        if len(loadgen_result_file) > 1:
+            logging.error(f"There are more then one {file} in {path}")
+        if len(loadgen_result_file) == 0:
+            logging.error(f"There is no {file} in {path}")
+        if os.path.dirname(loadgen_result_file[0]) != abs_path:
+            target_path = os.path.join(
+                abs_path, os.path.basename(loadgen_result_file[0])
+            )
+            logging.warning(f"Move {str(loadgen_result_file[0])!r} to {target_path!r}")
+            os.replace(loadgen_result_file[0], target_path)
 
 
 def main() -> None:
@@ -265,6 +289,8 @@ def main() -> None:
             exit(1)
 
         shutil.move(args.loadgen_logs, out)
+
+        reorder_loadgen_files(out)
 
         if len(os.listdir(out)) == 0:
             logging.fatal(f"The directory {out!r} is empty")
