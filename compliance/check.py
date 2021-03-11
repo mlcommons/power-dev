@@ -126,7 +126,7 @@ def compare_dicts_values(d1: Dict[str, str], d2: Dict[str, str], comment: str) -
 def compare_dicts(s1: Dict[str, str], s2: Dict[str, str], comment: str) -> None:
     assert (
         s1.keys() == s2.keys()
-    ), f"{comment} Expected files are {', '.join(s1.keys())!r}, but got {', '.join(s2.keys())!r}."
+    ), f"{comment} Expected key values are {', '.join(s1.keys())!r},\nbut got {', '.join(s2.keys())!r}."
 
     compare_dicts_values(s1, s2, comment)
 
