@@ -591,6 +591,8 @@ def check(path: str) -> int:
     for description in check_with_description.keys():
         result &= check_with_logging(description, check_with_description[description])
 
+    print(f"\n{'All' if result else 'ERROR: Not all'} checks passed")
+
     return 0 if result is True else 1
 
 
