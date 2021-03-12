@@ -14,27 +14,22 @@
 # limitations under the License.
 # =============================================================================
 
+from collections import OrderedDict
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Tuple, Set, Any, Optional, Callable
 import argparse
+import hashlib
 import json
 import os
 import re
 import sys
 import uuid
-import json
-
-current_dir = os.path.dirname(os.path.realpath(__file__))
-ptd_client_server_dir = os.path.join(os.path.dirname(current_dir), "ptd_client_server")
-sys.path.append(ptd_client_server_dir)
 
 
 class LineWithoutTimeStamp(Exception):
     pass
 
-
-from lib import source_hashes  # type: ignore
 
 SUPPORTED_VERSION = ["1.9.1", "1.9.2"]
 SUPPORTED_MODEL = {
@@ -64,6 +59,39 @@ RESULT_PATHS = [
 COMMON_ERROR = "Can't evaluate uncertainty of this sample!"
 COMMON_WARNING = "Uncertainty unknown for the last measurement sample!"
 
+def _normalize(path: str) -> str:
+    allparts: List[str] = []
+    while 1:
+        parts = os.path.split(path)
+        if parts[0] == path:  # sentinel for absolute paths
+            allparts.insert(0, parts[0])
+            break
+        elif parts[1] == path:  # sentinel for relative paths
+            allparts.insert(0, parts[1])
+            break
+        else:
+            path = parts[0]
+            allparts.insert(0, parts[1])
+    return "/".join(allparts)
+
+
+def _sort_dict(x: Dict[str, Any]) -> "OrderedDict[str, Any]":
+    return OrderedDict(sorted(x.items()))
+
+
+def hash_dir(dirname: str) -> Dict[str, str]:
+    result: Dict[str, str] = {}
+
+    for path, dirs, files in os.walk(dirname, topdown=True):
+        relpath = os.path.relpath(path, dirname)
+        if relpath == ".":
+            relpath = ""
+        for file in files:
+            fname = os.path.join(relpath, file)
+            with open(os.path.join(path, file), "rb") as f:
+                result[_normalize(fname)] = hashlib.sha1(f.read()).hexdigest()
+
+    return _sort_dict(result)
 
 def get_time_from_line(
     line: str, data_regexp: str, file: str, timezone_offset: int
@@ -113,7 +141,7 @@ def compare_dicts_values(d1: Dict[str, str], d2: Dict[str, str], comment: str) -
 def compare_dicts(s1: Dict[str, str], s2: Dict[str, str], comment: str) -> None:
     assert (
         s1.keys() == s2.keys()
-    ), f"{comment} Expected files are {', '.join(s1.keys())!r}, but got {', '.join(s2.keys())!r}."
+    ), f"{comment} Expected key values are {', '.join(s1.keys())!r},\nbut got {', '.join(s2.keys())!r}."
 
     compare_dicts_values(s1, s2, comment)
 
@@ -369,8 +397,9 @@ def results_check(
        Check that results from client.json and server.json have no extra and absent files.
        Compare that results files from client.json and server.json have the same checksum.
     """
+
     # Hashes of the files in results directory
-    results = dict(source_hashes.hash_dir(result_path))
+    results = dict(hash_dir(result_path))
     # Hashes recorded in server.json
     results_s = server_sd.json_object["results"]
     # Hashes recorded in client.json
@@ -585,7 +614,9 @@ def check(path: str) -> int:
     for description in check_with_description.keys():
         result &= check_with_logging(description, check_with_description[description])
 
-    return 0 if result is True else 1
+    print(f"\n{'All' if result else 'ERROR: Not all'} checks passed")
+
+    return 0 if result else 1
 
 
 if __name__ == "__main__":
