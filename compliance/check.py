@@ -380,31 +380,11 @@ def results_check(
     results.pop("power/server.json")
     RESULT_PATHS.remove("power/server.json")
 
-    def is_same_file(path: str, ref: str) -> bool:
-        return os.path.basename(path) == os.path.basename(ref)
-
-    def find_file(path: str, pool: List[str]) -> int:
-        candidates = []
-        for i, ref_path in enumerate(pool):
-            if is_same_file(path, ref_path):
-                candidates.append((i, ref_path))
-        if len(candidates) == 1:
-            return candidates[0][0]
-        elif len(candidates) > 1:
-            for i, candidate in candidates:
-                for mode in [RANGING_MODE, TESTING_MODE]:
-                    if mode in path and mode in candidate:
-                        return i
-        return -1
-
     def remove_optional_path(res: Dict[str, str]) -> None:
         keys = list(res.keys())
         for path in keys:
-            path_idx = find_file(path, RESULT_PATHS)
-            if path_idx == -1:
-                del res[path]
-            elif path != RESULT_PATHS[path_idx]:
-                res[RESULT_PATHS[path_idx]] = res[path]
+            # Ignore all the optional files.
+            if path not in RESULT_PATHS:
                 del res[path]
 
     # We only check the hashes of the files required for submission.
