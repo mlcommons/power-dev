@@ -48,16 +48,17 @@ RESULT_PATHS = [
     "power/ptd_logs.txt",
     "power/server.json",
     "power/server.log",
-    os.path.join(RANGING_MODE, "mlperf_log_detail.txt"),
-    os.path.join(RANGING_MODE, "mlperf_log_summary.txt"),
-    os.path.join(RANGING_MODE, "spl.txt"),
-    os.path.join(TESTING_MODE, "mlperf_log_detail.txt"),
-    os.path.join(TESTING_MODE, "mlperf_log_summary.txt"),
-    os.path.join(TESTING_MODE, "spl.txt"),
+    RANGING_MODE + "/mlperf_log_detail.txt",
+    RANGING_MODE + "/mlperf_log_summary.txt",
+    RANGING_MODE + "/spl.txt",
+    TESTING_MODE + "/mlperf_log_detail.txt",
+    TESTING_MODE + "/mlperf_log_summary.txt",
+    TESTING_MODE + "/spl.txt",
 ]
 
 COMMON_ERROR = "Can't evaluate uncertainty of this sample!"
 COMMON_WARNING = "Uncertainty unknown for the last measurement sample!"
+
 
 def _normalize(path: str) -> str:
     allparts: List[str] = []
@@ -92,6 +93,7 @@ def hash_dir(dirname: str) -> Dict[str, str]:
                 result[_normalize(fname)] = hashlib.sha1(f.read()).hexdigest()
 
     return _sort_dict(result)
+
 
 def get_time_from_line(
     line: str, data_regexp: str, file: str, timezone_offset: int
@@ -453,8 +455,11 @@ def results_check(
             len(absent_files) == 0
         ), f"There are absent files {', '.join(absent_files)!r} in the results of {path}"
 
-    result_files_compare(result_c_s, RESULT_PATHS, f"{server_sd.path} + {client_sd.path}")
+    result_files_compare(
+        result_c_s, RESULT_PATHS, f"{server_sd.path} + {client_sd.path}"
+    )
     result_files_compare(results, RESULT_PATHS, result_path)
+
 
 def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     """Check if ptd message starts with 'WARNING' or 'ERROR' in ptd logs.
