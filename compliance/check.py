@@ -39,38 +39,26 @@ SUPPORTED_MODEL = {
     77: "YokogawaWT330E",
 }
 
-RESULT_PATHS_C = [
-    "power/client.log",
-    "ranging/mlperf_log_detail.txt",
-    "ranging/mlperf_log_summary.txt",
-    "run_1/mlperf_log_detail.txt",
-    "run_1/mlperf_log_summary.txt",
-]
+RANGING_MODE = "ranging"
+TESTING_MODE = "run_1"
 
-OPTIONAL_RESULT_PATHS_C = [
-    "ranging/mlperf_log_accuracy.json",
-    "ranging/mlperf_log_trace.json",
-    "run_1/mlperf_log_accuracy.json",
-    "run_1/mlperf_log_trace.json",
-]
-
-RESULT_PATHS_S = [
+RESULT_PATHS = [
     "power/client.json",
     "power/client.log",
     "power/ptd_logs.txt",
-    "ranging/spl.txt",
+    "power/server.json",
     "power/server.log",
-    "run_1/spl.txt",
+    RANGING_MODE + "/mlperf_log_detail.txt",
+    RANGING_MODE + "/mlperf_log_summary.txt",
+    RANGING_MODE + "/spl.txt",
+    TESTING_MODE + "/mlperf_log_detail.txt",
+    TESTING_MODE + "/mlperf_log_summary.txt",
+    TESTING_MODE + "/spl.txt",
 ]
-
-RESULT_PATHS = RESULT_PATHS_C + RESULT_PATHS_S
-
-RANGING_MODE = "ranging"
-TESTING_NODE = "testing"
-
 
 COMMON_ERROR = "Can't evaluate uncertainty of this sample!"
 COMMON_WARNING = "Uncertainty unknown for the last measurement sample!"
+
 
 def _normalize(path: str) -> str:
     allparts: List[str] = []
@@ -105,6 +93,7 @@ def hash_dir(dirname: str) -> Dict[str, str]:
                 result[_normalize(fname)] = hashlib.sha1(f.read()).hexdigest()
 
     return _sort_dict(result)
+
 
 def get_time_from_line(
     line: str, data_regexp: str, file: str, timezone_offset: int
@@ -288,7 +277,7 @@ def phases_check(
             ), f"The time difference for {i + 1} phase of {mode} mode is equal or more than 200ms."
 
     comapre_time(phases_ranging_c, phases_ranging_s, RANGING_MODE)
-    comapre_time(phases_testing_c, phases_testing_s, TESTING_NODE)
+    comapre_time(phases_testing_c, phases_testing_s, TESTING_MODE)
 
     def compare_duration(range_duration: float, test_duration: float) -> None:
         duration_diff = abs(range_duration - test_duration) / max(
@@ -406,21 +395,31 @@ def results_check(
        Check that results from client.json and server.json have no extra and absent files.
        Compare that results files from client.json and server.json have the same checksum.
     """
+
+    # Hashes of the files in results directory
     results = dict(hash_dir(result_path))
+    # Hashes recorded in server.json
     results_s = server_sd.json_object["results"]
+    # Hashes recorded in client.json
     results_c = client_sd.json_object["results"]
 
     # TODO: server.json checksum
     results.pop("power/server.json")
+    RESULT_PATHS.remove("power/server.json")
 
     def remove_optional_path(res: Dict[str, str]) -> None:
-        for path in OPTIONAL_RESULT_PATHS_C:
-            res.pop(path, "empty")
+        keys = list(res.keys())
+        for path in keys:
+            # Ignore all the optional files.
+            if path not in RESULT_PATHS:
+                del res[path]
 
+    # We only check the hashes of the files required for submission.
     remove_optional_path(results_s)
     remove_optional_path(results_c)
     remove_optional_path(results)
 
+    # Make sure the hashes match between server.json and client.json
     compare_dicts_values(
         results_s,
         results_c,
@@ -429,32 +428,33 @@ def results_check(
     compare_dicts_values(
         results_c,
         results_s,
-        f"{server_sd.path} and {client_sd.path} results checksum comparison",
+        f"{client_sd.path} and {server_sd.path} results checksum comparison",
     )
 
+    # Check if the hashes of the files in results directory match the ones recorded in server.json/client.json.
     result_c_s = {**results_c, **results_s}
 
     compare_dicts(
         result_c_s,
         results,
-        f"{server_sd.path} 'results' checksum values and calculated {result_path} content checksum comparison:\n",
+        f"{server_sd.path} + {client_sd.path} results checksum values and calculated {result_path} content checksum comparison:\n",
     )
 
+    # Check if all the required files are present
     def result_files_compare(
         res: Dict[str, str], ref_res: List[str], path: str
     ) -> None:
-        extra_files = set(res.keys()) - set(ref_res)
-        assert (
-            len(extra_files) == 0
-        ), f"There are extra files {', '.join(extra_files)!r} in the results of {path}"
-
+        # If a file is required (in ref_res) but is not present in results directory (res),
+        # then the submission is invalid.
         absent_files = set(ref_res) - set(res.keys())
         assert (
             len(absent_files) == 0
         ), f"There are absent files {', '.join(absent_files)!r} in the results of {path}"
 
-    result_files_compare(result_c_s, RESULT_PATHS, server_sd.path)
-    result_files_compare(results_c, RESULT_PATHS_C, client_sd.path)
+    result_files_compare(
+        result_c_s, RESULT_PATHS, f"{server_sd.path} + {client_sd.path}"
+    )
+    result_files_compare(results, RESULT_PATHS, result_path)
 
 
 def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
