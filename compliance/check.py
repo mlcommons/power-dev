@@ -424,6 +424,7 @@ def results_check(
             len(absent_files) == 0
         ), f"There are absent files {', '.join(absent_files)!r} in the results of {path}"
 
+    result_files_compare(result_c_s, RESULT_PATHS, f"{server_sd.path} + {client_sd.path}")
     result_files_compare(results, RESULT_PATHS, result_path)
 
 def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
