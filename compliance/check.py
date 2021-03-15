@@ -263,8 +263,8 @@ def phases_check(
     client_sd: SessionDescriptor, server_sd: SessionDescriptor, path: str
 ) -> None:
     """Check that the time difference between corresponding checkpoint values from client.json and server.json is less than 200 ms.
-       Check that the loadgen timestamps are within workload time interval.
-       Check that the duration of loadgen test for the ranging mode is comparable with duration of loadgen test for the testing mode.
+    Check that the loadgen timestamps are within workload time interval.
+    Check that the duration of loadgen test for the ranging mode is comparable with duration of loadgen test for the testing mode.
     """
     phases_ranging_c = client_sd.json_object["phases"]["ranging"]
     phases_testing_c = client_sd.json_object["phases"]["testing"]
@@ -304,11 +304,17 @@ def phases_check(
             for line in f:
                 if re.search("power_begin", line.lower()):
                     system_begin = get_time_from_line(
-                        line, "(\d*-\d*-\d* \d*:\d*:\d*\.\d*)", file, timezone_offset,
+                        line,
+                        "(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
+                        file,
+                        timezone_offset,
                     )
                 elif re.search("power_end", line.lower()):
                     system_end = get_time_from_line(
-                        line, "(\d*-\d*-\d* \d*:\d*:\d*\.\d*)", file, timezone_offset,
+                        line,
+                        "(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
+                        file,
+                        timezone_offset,
                     )
                 if system_begin and system_end:
                     break
@@ -358,8 +364,8 @@ def session_name_check(
 
 def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> None:
     """Compare client and server messages list length.
-       Compare messages values and replies from client.json and server.json.
-       Compare client and server version.
+    Compare messages values and replies from client.json and server.json.
+    Compare client and server version.
     """
     mc = client_sd.json_object["messages"]
     ms = server_sd.json_object["messages"]
@@ -396,8 +402,8 @@ def results_check(
     server_sd: SessionDescriptor, client_sd: SessionDescriptor, result_path: str
 ) -> None:
     """Calculate the checksum for result files. Compare them with the checksums list formed from joined results from server.json and client.json.
-       Check that results from client.json and server.json have no extra and absent files.
-       Compare that results files from client.json and server.json have the same checksum.
+    Check that results from client.json and server.json have no extra and absent files.
+    Compare that results files from client.json and server.json have the same checksum.
     """
 
     # Hashes of the files in results directory
@@ -463,7 +469,7 @@ def results_check(
 
 def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     """Check if ptd message starts with 'WARNING' or 'ERROR' in ptd logs.
-       Check 'Uncertainty checking for Yokogawa... is activated' in PTD logs.
+    Check 'Uncertainty checking for Yokogawa... is activated' in PTD logs.
     """
     start_ranging_time = None
     stop_ranging_time = None
@@ -551,14 +557,15 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
 
 def check_ptd_config(server_sd: SessionDescriptor) -> None:
     """Check the device number is supported.
-       If the device is multichannel, check that two numbers are using for channel configuration.
+    If the device is multichannel, check that two numbers are using for channel configuration.
     """
     ptd_config = server_sd.json_object["ptd_config"]
 
     dev_num = ptd_config["device_type"]
-    assert dev_num in SUPPORTED_MODEL.keys(), (
-        f"Device number {dev_num} is not supported. Supported numbers are "
-        + ", ".join([str(i) for i in SUPPORTED_MODEL.keys()])
+    assert (
+        dev_num in SUPPORTED_MODEL.keys()
+    ), f"Device number {dev_num} is not supported. Supported numbers are " + ", ".join(
+        [str(i) for i in SUPPORTED_MODEL.keys()]
     )
 
     if dev_num == 77:
