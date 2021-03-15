@@ -107,7 +107,7 @@ class SessionDescriptor:
     def __init__(self, path: str):
         self.path = path
         with open(path, "r") as f:
-            self.json_object: Dict = json.loads(f.read())
+            self.json_object: Dict[str, Any] = json.loads(f.read())
             self.required_fields_check()
 
     def required_fields_check(self) -> None:
@@ -169,7 +169,7 @@ def ptd_messages_check(sd: SessionDescriptor) -> None:
     - Compare message replies with expected values.
     - Check that initial values set after the test is completed.
     """
-    msgs = sd.json_object["ptd_messages"]
+    msgs: List[Dict[str, str]] = sd.json_object["ptd_messages"]
 
     def get_ptd_answer(command: str) -> str:
         for msg in msgs:
@@ -273,7 +273,9 @@ def phases_check(
     phases_ranging_s = server_sd.json_object["phases"]["ranging"]
     phases_testing_s = server_sd.json_object["phases"]["testing"]
 
-    def comapre_time(phases_client, phases_server, mode) -> None:
+    def comapre_time(
+        phases_client: List[List[float]], phases_server: List[List[float]], mode: str
+    ) -> None:
         assert len(phases_client) == len(
             phases_server
         ), f"Phases amount is not equal for {mode} mode."
