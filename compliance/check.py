@@ -149,7 +149,9 @@ def compare_dicts(s1: Dict[str, str], s2: Dict[str, str], comment: str) -> None:
 
 
 def sources_check(sd: SessionDescriptor) -> None:
-    """Compare the current checksum of the code from client.json or server.json against the standard checksum of the source code from sources_checksums.json."""
+    """Compare the current checksum of the code from client.json or server.json
+    against the standard checksum of the source code from sources_checksums.json.
+    """
     s = sd.json_object["sources"]
 
     with open(os.path.join(os.path.dirname(__file__), "sources_checksums.json")) as f:
@@ -262,9 +264,11 @@ def uuid_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> No
 def phases_check(
     client_sd: SessionDescriptor, server_sd: SessionDescriptor, path: str
 ) -> None:
-    """Check that the time difference between corresponding checkpoint values from client.json and server.json is less than 200 ms.
+    """Check that the time difference between corresponding checkpoint values
+    from client.json and server.json is less than 200 ms.
     Check that the loadgen timestamps are within workload time interval.
-    Check that the duration of loadgen test for the ranging mode is comparable with duration of loadgen test for the testing mode.
+    Check that the duration of loadgen test for the ranging mode is comparable
+    with duration of loadgen test for the testing mode.
     """
     phases_ranging_c = client_sd.json_object["phases"]["ranging"]
     phases_testing_c = client_sd.json_object["phases"]["testing"]
@@ -380,11 +384,13 @@ def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -
             mc[i]["cmd"] == ms[i]["cmd"]
         ), f"Commands {i} are different. Server command is {ms[i]['cmd']!r}. Client command is {mc[i]['cmd']!r}."
         if "time" != mc[i]["cmd"]:
-            assert (
-                mc[i]["reply"] == ms[i]["reply"]
-            ), f"Replies on command {mc[i]['cmd']!r} are different. Server reply is {ms[i]['reply']!r}. Client command is {mc[i]['reply']!r}."
+            assert mc[i]["reply"] == ms[i]["reply"], (
+                f"Replies on command {mc[i]['cmd']!r} are different. "
+                f"Server reply is {ms[i]['reply']!r}. Client command is {mc[i]['reply']!r}."
+            )
 
-    # Check client and server version from server.json. Server.json contains all client.json messages and replies. Checked earlier.
+    # Check client and server version from server.json.
+    # Server.json contains all client.json messages and replies. Checked earlier.
     def get_version(regexp: str, line: str) -> str:
         version_o = re.search(regexp, line)
         assert version_o is not None, f"Server version is not defined in:'{line}'"
@@ -401,7 +407,8 @@ def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -
 def results_check(
     server_sd: SessionDescriptor, client_sd: SessionDescriptor, result_path: str
 ) -> None:
-    """Calculate the checksum for result files. Compare them with the checksums list formed from joined results from server.json and client.json.
+    """Calculate the checksum for result files. Compare them with the checksums
+    list formed from joined results from server.json and client.json.
     Check that results from client.json and server.json have no extra and absent files.
     Compare that results files from client.json and server.json have the same checksum.
     """
@@ -447,7 +454,8 @@ def results_check(
     compare_dicts(
         result_c_s,
         results,
-        f"{server_sd.path} + {client_sd.path} results checksum values and calculated {result_path} content checksum comparison:\n",
+        f"{server_sd.path} + {client_sd.path} results checksum values and "
+        f"calculated {result_path} content checksum comparison:\n",
     )
 
     # Check if all the required files are present
