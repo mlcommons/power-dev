@@ -16,14 +16,12 @@
 
 from collections import OrderedDict
 from datetime import datetime, timezone
-from decimal import Decimal
-from typing import Dict, List, Tuple, Set, Any, Optional, Callable
+from typing import Dict, List, Tuple, Any, Optional, Callable
 import argparse
 import hashlib
 import json
 import os
 import re
-import sys
 import uuid
 
 
@@ -220,7 +218,7 @@ def ptd_messages_check(sd: SessionDescriptor) -> None:
         try:
             if reply_list[param_num] == "0" and float(reply_list[param_num + 1]) > 0:
                 return reply_list[param_num + 1]
-        except (ValueError, IndexError) as e:
+        except (ValueError, IndexError):
             raise Exception(f"Can not get power meters initial values from {reply!r}")
         return "Auto"
 
@@ -309,14 +307,14 @@ def phases_check(
                 if re.search("power_begin", line.lower()):
                     system_begin = get_time_from_line(
                         line,
-                        "(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
+                        r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
                         file,
                         timezone_offset,
                     )
                 elif re.search("power_end", line.lower()):
                     system_end = get_time_from_line(
                         line,
-                        "(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
+                        r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
                         file,
                         timezone_offset,
                     )
@@ -396,8 +394,8 @@ def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -
         assert version_o is not None, f"Server version is not defined in:'{line}'"
         return version_o.group(1)
 
-    client_version = get_version("mlcommons\/power client v(\d+)$", ms[0]["cmd"])
-    server_version = get_version("mlcommons\/power server v(\d+)$", ms[0]["reply"])
+    client_version = get_version(r"mlcommons\/power client v(\d+)$", ms[0]["cmd"])
+    server_version = get_version(r"mlcommons\/power server v(\d+)$", ms[0]["reply"])
 
     assert (
         client_version == server_version
@@ -484,7 +482,7 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     ranging_mark = f"{server_sd.json_object['session_name']}_ranging"
 
     file_path = os.path.join(path, "power", "ptd_logs.txt")
-    date_regexp = "(^\d\d-\d\d-\d\d\d\d \d\d:\d\d:\d\d.\d\d\d)"
+    date_regexp = r"(^\d\d-\d\d-\d\d\d\d \d\d:\d\d:\d\d.\d\d\d)"
     timezone_offset = int(server_sd.json_object["timezone"])
 
     with open(file_path, "r") as f:
@@ -537,7 +535,7 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     is_uncertainty_check_activated = False
 
     for line in ptd_log_lines:
-        msg_o = re.search(f"Uncertainty checking for Yokogawa\S+ is activated", line)
+        msg_o = re.search(r"Uncertainty checking for Yokogawa\S+ is activated", line)
         if msg_o is not None:
             try:
                 log_time = None
