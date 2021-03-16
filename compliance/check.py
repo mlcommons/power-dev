@@ -16,14 +16,12 @@
 
 from collections import OrderedDict
 from datetime import datetime, timezone
-from decimal import Decimal
-from typing import Dict, List, Tuple, Set, Any, Optional, Callable
+from typing import Dict, List, Tuple, Any, Optional, Callable
 import argparse
 import hashlib
 import json
 import os
 import re
-import sys
 import uuid
 
 
@@ -109,7 +107,7 @@ class SessionDescriptor:
     def __init__(self, path: str):
         self.path = path
         with open(path, "r") as f:
-            self.json_object: Dict = json.loads(f.read())
+            self.json_object: Dict[str, Any] = json.loads(f.read())
             self.required_fields_check()
 
     def required_fields_check(self) -> None:
@@ -152,7 +150,9 @@ def compare_dicts(s1: Dict[str, str], s2: Dict[str, str], comment: str) -> None:
 
 
 def sources_check(sd: SessionDescriptor) -> None:
-    """Compare the current checksum of the code from client.json or server.json against the standard checksum of the source code from sources_checksums.json."""
+    """Compare the current checksum of the code from client.json or server.json
+    against the standard checksum of the source code from sources_checksums.json.
+    """
     s = sd.json_object["sources"]
 
     with open(os.path.join(os.path.dirname(__file__), "sources_checksums.json")) as f:
@@ -172,7 +172,7 @@ def ptd_messages_check(sd: SessionDescriptor) -> None:
     - Compare message replies with expected values.
     - Check that initial values set after the test is completed.
     """
-    msgs = sd.json_object["ptd_messages"]
+    msgs: List[Dict[str, str]] = sd.json_object["ptd_messages"]
 
     def get_ptd_answer(command: str) -> str:
         for msg in msgs:
@@ -221,7 +221,7 @@ def ptd_messages_check(sd: SessionDescriptor) -> None:
         try:
             if reply_list[param_num] == "0" and float(reply_list[param_num + 1]) > 0:
                 return reply_list[param_num + 1]
-        except (ValueError, IndexError) as e:
+        except (ValueError, IndexError):
             raise Exception(f"Can not get power meters initial values from {reply!r}")
         return "Auto"
 
@@ -265,16 +265,20 @@ def uuid_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> No
 def phases_check(
     client_sd: SessionDescriptor, server_sd: SessionDescriptor, path: str
 ) -> None:
-    """Check that the time difference between corresponding checkpoint values from client.json and server.json is less than 200 ms.
-       Check that the loadgen timestamps are within workload time interval.
-       Check that the duration of loadgen test for the ranging mode is comparable with duration of loadgen test for the testing mode.
+    """Check that the time difference between corresponding checkpoint values
+    from client.json and server.json is less than 200 ms.
+    Check that the loadgen timestamps are within workload time interval.
+    Check that the duration of loadgen test for the ranging mode is comparable
+    with duration of loadgen test for the testing mode.
     """
     phases_ranging_c = client_sd.json_object["phases"]["ranging"]
     phases_testing_c = client_sd.json_object["phases"]["testing"]
     phases_ranging_s = server_sd.json_object["phases"]["ranging"]
     phases_testing_s = server_sd.json_object["phases"]["testing"]
 
-    def comapre_time(phases_client, phases_server, mode) -> None:
+    def comapre_time(
+        phases_client: List[List[float]], phases_server: List[List[float]], mode: str
+    ) -> None:
         assert len(phases_client) == len(
             phases_server
         ), f"Phases amount is not equal for {mode} mode."
@@ -307,11 +311,17 @@ def phases_check(
             for line in f:
                 if re.search("power_begin", line.lower()):
                     system_begin = get_time_from_line(
-                        line, "(\d*-\d*-\d* \d*:\d*:\d*\.\d*)", file, timezone_offset,
+                        line,
+                        r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
+                        file,
+                        timezone_offset,
                     )
                 elif re.search("power_end", line.lower()):
                     system_end = get_time_from_line(
-                        line, "(\d*-\d*-\d* \d*:\d*:\d*\.\d*)", file, timezone_offset,
+                        line,
+                        r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
+                        file,
+                        timezone_offset,
                     )
                 if system_begin and system_end:
                     break
@@ -361,8 +371,8 @@ def session_name_check(
 
 def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> None:
     """Compare client and server messages list length.
-       Compare messages values and replies from client.json and server.json.
-       Compare client and server version.
+    Compare messages values and replies from client.json and server.json.
+    Compare client and server version.
     """
     mc = client_sd.json_object["messages"]
     ms = server_sd.json_object["messages"]
@@ -377,18 +387,20 @@ def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -
             mc[i]["cmd"] == ms[i]["cmd"]
         ), f"Commands {i} are different. Server command is {ms[i]['cmd']!r}. Client command is {mc[i]['cmd']!r}."
         if "time" != mc[i]["cmd"]:
-            assert (
-                mc[i]["reply"] == ms[i]["reply"]
-            ), f"Replies on command {mc[i]['cmd']!r} are different. Server reply is {ms[i]['reply']!r}. Client command is {mc[i]['reply']!r}."
+            assert mc[i]["reply"] == ms[i]["reply"], (
+                f"Replies on command {mc[i]['cmd']!r} are different. "
+                f"Server reply is {ms[i]['reply']!r}. Client command is {mc[i]['reply']!r}."
+            )
 
-    # Check client and server version from server.json. Server.json contains all client.json messages and replies. Checked earlier.
+    # Check client and server version from server.json.
+    # Server.json contains all client.json messages and replies. Checked earlier.
     def get_version(regexp: str, line: str) -> str:
         version_o = re.search(regexp, line)
         assert version_o is not None, f"Server version is not defined in:'{line}'"
         return version_o.group(1)
 
-    client_version = get_version("mlcommons\/power client v(\d+)$", ms[0]["cmd"])
-    server_version = get_version("mlcommons\/power server v(\d+)$", ms[0]["reply"])
+    client_version = get_version(r"mlcommons\/power client v(\d+)$", ms[0]["cmd"])
+    server_version = get_version(r"mlcommons\/power server v(\d+)$", ms[0]["reply"])
 
     assert (
         client_version == server_version
@@ -398,9 +410,10 @@ def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -
 def results_check(
     server_sd: SessionDescriptor, client_sd: SessionDescriptor, result_path: str
 ) -> None:
-    """Calculate the checksum for result files. Compare them with the checksums list formed from joined results from server.json and client.json.
-       Check that results from client.json and server.json have no extra and absent files.
-       Compare that results files from client.json and server.json have the same checksum.
+    """Calculate the checksum for result files. Compare them with the checksums
+    list formed from joined results from server.json and client.json.
+    Check that results from client.json and server.json have no extra and absent files.
+    Compare that results files from client.json and server.json have the same checksum.
     """
 
     # Hashes of the files in results directory
@@ -444,7 +457,8 @@ def results_check(
     compare_dicts(
         result_c_s,
         results,
-        f"{server_sd.path} + {client_sd.path} results checksum values and calculated {result_path} content checksum comparison:\n",
+        f"{server_sd.path} + {client_sd.path} results checksum values and "
+        f"calculated {result_path} content checksum comparison:\n",
     )
 
     # Check if all the required files are present
@@ -466,14 +480,14 @@ def results_check(
 
 def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     """Check if ptd message starts with 'WARNING' or 'ERROR' in ptd logs.
-       Check 'Uncertainty checking for Yokogawa... is activated' in PTD logs.
+    Check 'Uncertainty checking for Yokogawa... is activated' in PTD logs.
     """
     start_ranging_time = None
     stop_ranging_time = None
     ranging_mark = f"{server_sd.json_object['session_name']}_ranging"
 
     file_path = os.path.join(path, "power", "ptd_logs.txt")
-    date_regexp = "(^\d\d-\d\d-\d\d\d\d \d\d:\d\d:\d\d.\d\d\d)"
+    date_regexp = r"(^\d\d-\d\d-\d\d\d\d \d\d:\d\d:\d\d.\d\d\d)"
     timezone_offset = int(server_sd.json_object["timezone"])
 
     with open(file_path, "r") as f:
@@ -526,7 +540,7 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     is_uncertainty_check_activated = False
 
     for line in ptd_log_lines:
-        msg_o = re.search(f"Uncertainty checking for Yokogawa\S+ is activated", line)
+        msg_o = re.search(r"Uncertainty checking for Yokogawa\S+ is activated", line)
         if msg_o is not None:
             try:
                 log_time = None
@@ -554,14 +568,15 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
 
 def check_ptd_config(server_sd: SessionDescriptor) -> None:
     """Check the device number is supported.
-       If the device is multichannel, check that two numbers are using for channel configuration.
+    If the device is multichannel, check that two numbers are using for channel configuration.
     """
     ptd_config = server_sd.json_object["ptd_config"]
 
     dev_num = ptd_config["device_type"]
-    assert dev_num in SUPPORTED_MODEL.keys(), (
-        f"Device number {dev_num} is not supported. Supported numbers are "
-        + ", ".join([str(i) for i in SUPPORTED_MODEL.keys()])
+    assert (
+        dev_num in SUPPORTED_MODEL.keys()
+    ), f"Device number {dev_num} is not supported. Supported numbers are " + ", ".join(
+        [str(i) for i in SUPPORTED_MODEL.keys()]
     )
 
     if dev_num == 77:
