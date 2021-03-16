@@ -142,8 +142,11 @@ def compare_dicts_values(d1: Dict[str, str], d2: Dict[str, str], comment: str) -
 
 def compare_dicts(s1: Dict[str, str], s2: Dict[str, str], comment: str) -> None:
     assert (
-        s1.keys() == s2.keys()
-    ), f"{comment} Expected key values are {', '.join(s1.keys())!r},\nbut got {', '.join(s2.keys())!r}."
+        not s1.keys() - s2.keys()
+    ), f"{comment} Missing {', '.join(sorted(s1.keys() - s2.keys()))!r}"
+    assert (
+        not s2.keys() - s1.keys()
+    ), f"{comment} Extra {', '.join(sorted(s2.keys() - s1.keys()))!r}"
 
     compare_dicts_values(s1, s2, comment)
 
