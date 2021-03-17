@@ -425,13 +425,14 @@ def results_check(
 
     # TODO: server.json checksum
     results.pop("power/server.json")
-    RESULT_PATHS.remove("power/server.json")
+    result_paths_copy = RESULT_PATHS.copy()
+    result_paths_copy.remove("power/server.json")
 
     def remove_optional_path(res: Dict[str, str]) -> None:
         keys = list(res.keys())
         for path in keys:
             # Ignore all the optional files.
-            if path not in RESULT_PATHS:
+            if path not in result_paths_copy:
                 del res[path]
 
     # We only check the hashes of the files required for submission.
@@ -473,9 +474,9 @@ def results_check(
         ), f"There are absent files {', '.join(absent_files)!r} in the results of {path}"
 
     result_files_compare(
-        result_c_s, RESULT_PATHS, f"{server_sd.path} + {client_sd.path}"
+        result_c_s, result_paths_copy, f"{server_sd.path} + {client_sd.path}"
     )
-    result_files_compare(results, RESULT_PATHS, result_path)
+    result_files_compare(results, result_paths_copy, result_path)
 
 
 def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
