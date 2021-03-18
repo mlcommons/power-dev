@@ -18,13 +18,13 @@ import os
 import json
 import sys
 
+from lib import source_hashes  # type: ignore
+
 compliance_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 project_dir = os.path.dirname(compliance_dir)
 ptd_client_server_dir = os.path.join(project_dir, "ptd_client_server")
 
 sys.path.append(ptd_client_server_dir)
-
-from lib import source_hashes  # type: ignore
 
 
 def update_sources_checksum() -> None:

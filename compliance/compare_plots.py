@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # =============================================================================
+
+from typing import List
 import sys
 import argparse
 import re
@@ -20,7 +22,7 @@ import re
 watts_value_reg_exp = re.compile("Watts,([-]?[0-9]+[.][0-9]+)")
 
 
-def get_values(path):
+def get_values(path: str) -> List[float]:
     watts_values = []
     try:
         with open(path, "r") as log:
@@ -40,11 +42,13 @@ def get_values(path):
     return watts_values
 
 
-def are_charts_identical(ranging_values, testing_values, uncertainty):
+def are_charts_identical(
+    ranging_values: List[float], testing_values: List[float], uncertainty: float
+) -> bool:
     min_len = min(len(ranging_values), len(testing_values))
     longest_list = ranging_values if min_len == len(testing_values) else testing_values
-    diff_sum = 0
-    ranging_sum = 0
+    diff_sum = 0.0
+    ranging_sum = 0.0
     for i in range(min_len):
         diff_sum += abs(ranging_values[i] - testing_values[i])
     for i in range(min_len, len(longest_list)):
