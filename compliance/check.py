@@ -34,7 +34,7 @@ SUPPORTED_MODEL = {
     8: "YokogawaWT210",
     49: "YokogawaWT310",
     52: "YokogawaWT330E",
-    77: "YokogawaWT330E",
+    77: "YokogawaWT330_multichannel",
 }
 
 RANGING_MODE = "ranging"
