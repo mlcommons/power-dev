@@ -37,6 +37,8 @@ class CheckerWarning(Exception):
 SUPPORTED_VERSION = ["1.9.1", "1.9.2"]
 SUPPORTED_MODEL = {
     8: "YokogawaWT210",
+    35: "YokogawaWT500",
+    48: "YokogawaWT500_multichannel",
     49: "YokogawaWT310",
     52: "YokogawaWT330E",
     77: "YokogawaWT330_multichannel",
