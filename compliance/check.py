@@ -334,11 +334,14 @@ def phases_check(
     def compare_time_boundaries(
         begin: float, end: float, phases: List[Any], mode: str
     ) -> None:
+        # TODO: temporary workaround, remove when proper DST handling is implemented!
         assert (
             phases[1][0] < begin < phases[2][0]
+            or phases[1][0] < begin - 3600 < phases[2][0]
         ), f"Loadgen test begin time is not within {mode} mode time interval."
         assert (
             phases[1][0] < end < phases[2][0]
+            or phases[1][0] < end - 3600 < phases[2][0]
         ), f"Loadgen test end time is not within {mode} mode time interval."
 
     system_begin_r, system_end_r = get_begin_end_time_from_mlperf_log_detail(
