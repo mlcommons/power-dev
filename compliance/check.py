@@ -22,10 +22,15 @@ import hashlib
 import json
 import os
 import re
+import traceback
 import uuid
 
 
 class LineWithoutTimeStamp(Exception):
+    pass
+
+
+class CheckerWarning(Exception):
     pass
 
 
@@ -222,7 +227,7 @@ def ptd_messages_check(sd: SessionDescriptor) -> None:
             if reply_list[param_num] == "0" and float(reply_list[param_num + 1]) > 0:
                 return reply_list[param_num + 1]
         except (ValueError, IndexError):
-            raise Exception(f"Can not get power meters initial values from {reply!r}")
+            assert False, f"Can not get power meters initial values from {reply!r}"
         return "Auto"
 
     def get_command_by_value_and_number(cmd: str, number: int) -> Optional[str]:
@@ -232,7 +237,7 @@ def ptd_messages_check(sd: SessionDescriptor) -> None:
                 command_counter += 1
                 if command_counter == number:
                     return msg["cmd"]
-        raise Exception(f"Can not find the {number} command starting with {cmd!r}.")
+        assert False, f"Can not find the {number} command starting with {cmd!r}."
         return None
 
     initial_amps = get_initial_range(1, msgs[2]["reply"])
@@ -260,6 +265,41 @@ def uuid_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> No
     assert uuid.UUID(uuid_c["server"]) == uuid.UUID(
         uuid_s["server"]
     ), "'server uuid' is not equal."
+
+
+def _get_begin_end_time_from_mlperf_log_detail(
+    path: str, server_sd: SessionDescriptor
+) -> Tuple[float, float]:
+    system_begin = None
+    system_end = None
+
+    timezone_offset = int(server_sd.json_object["timezone"])
+
+    file = os.path.join(path, "mlperf_log_detail.txt")
+
+    with open(file) as f:
+        for line in f:
+            if re.search("power_begin", line.lower()):
+                system_begin = get_time_from_line(
+                    line,
+                    r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
+                    file,
+                    timezone_offset,
+                )
+            elif re.search("power_end", line.lower()):
+                system_end = get_time_from_line(
+                    line,
+                    r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
+                    file,
+                    timezone_offset,
+                )
+            if system_begin and system_end:
+                break
+
+    assert system_begin is not None, f"Can not get power_begin time from {file!r}"
+    assert system_end is not None, f"Can not get power_end time from {file!r}"
+
+    return system_begin, system_end
 
 
 def phases_check(
@@ -299,38 +339,6 @@ def phases_check(
             duration_diff < 0.05
         ), "Duration of the ranging mode differs from the duration of testing mode by more than 5 percent"
 
-    def get_begin_end_time_from_mlperf_log_detail(path: str) -> Tuple[float, float]:
-        system_begin = None
-        system_end = None
-
-        timezone_offset = int(server_sd.json_object["timezone"])
-
-        file = os.path.join(path, "mlperf_log_detail.txt")
-
-        with open(file) as f:
-            for line in f:
-                if re.search("power_begin", line.lower()):
-                    system_begin = get_time_from_line(
-                        line,
-                        r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
-                        file,
-                        timezone_offset,
-                    )
-                elif re.search("power_end", line.lower()):
-                    system_end = get_time_from_line(
-                        line,
-                        r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
-                        file,
-                        timezone_offset,
-                    )
-                if system_begin and system_end:
-                    break
-
-        assert system_begin is not None, f"Can not get power_begin time from {file!r}"
-        assert system_end is not None, f"Can not get power_end time from {file!r}"
-
-        return system_begin, system_end
-
     def compare_time_boundaries(
         begin: float, end: float, phases: List[Any], mode: str
     ) -> None:
@@ -344,12 +352,12 @@ def phases_check(
             or phases[1][0] < end - 3600 < phases[2][0]
         ), f"Loadgen test end time is not within {mode} mode time interval."
 
-    system_begin_r, system_end_r = get_begin_end_time_from_mlperf_log_detail(
-        os.path.join(path, "ranging")
+    system_begin_r, system_end_r = _get_begin_end_time_from_mlperf_log_detail(
+        os.path.join(path, "ranging"), server_sd
     )
 
-    system_begin_t, system_end_t = get_begin_end_time_from_mlperf_log_detail(
-        os.path.join(path, "run_1")
+    system_begin_t, system_end_t = _get_begin_end_time_from_mlperf_log_detail(
+        os.path.join(path, "run_1"), server_sd
     )
 
     compare_time_boundaries(system_begin_r, system_end_r, phases_ranging_c, "ranging")
@@ -490,6 +498,10 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     stop_ranging_time = None
     ranging_mark = f"{server_sd.json_object['session_name']}_ranging"
 
+    start_load_time, stop_load_time = _get_begin_end_time_from_mlperf_log_detail(
+        os.path.join(path, "run_1"), server_sd
+    )
+
     file_path = os.path.join(path, "power", "ptd_logs.txt")
     date_regexp = r"(^\d\d-\d\d-\d\d\d\d \d\d:\d\d:\d\d.\d\d\d)"
     timezone_offset = int(server_sd.json_object["timezone"])
@@ -497,19 +509,25 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     with open(file_path, "r") as f:
         ptd_log_lines = f.readlines()
 
-    def find_common_problem(reg_exp: str, line: str, common_problem: str) -> None:
+    def find_common_problem(
+        reg_exp: str, line: str, common_problem: str, error: bool
+    ) -> None:
         problem_line = re.search(reg_exp, line)
 
         if problem_line and problem_line.group(0):
             log_time = get_time_from_line(line, date_regexp, file_path, timezone_offset)
             if start_ranging_time is None or stop_ranging_time is None:
-                raise Exception("Can not find ranging time in ptd_logs.txt.")
-            if start_ranging_time < log_time < stop_ranging_time:
+                assert False, "Can not find ranging time in ptd_logs.txt."
+            if error:
                 assert (
                     problem_line.group(0).strip().startswith(common_problem)
+                    and start_ranging_time < log_time < stop_ranging_time
                 ), f"{line.strip()!r} in ptd_log.txt"
-                return
-            raise Exception(f"{line.strip()!r} in ptd_log.txt.")
+            else:
+                if start_load_time < log_time < stop_load_time:
+                    raise CheckerWarning(
+                        f"{line.strip()!r} in ptd_log.txt during load stage"
+                    )
 
     start_ranging_line = f": Go with mark {ranging_mark!r}"
 
@@ -539,7 +557,7 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
                 break
 
     if start_ranging_time is None or stop_ranging_time is None:
-        raise Exception("Can not find ranging time in ptd_logs.txt.")
+        assert False, "Can not find ranging time in ptd_logs.txt."
 
     is_uncertainty_check_activated = False
 
@@ -566,8 +584,8 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     ), "ptd_logs.txt: Line 'Uncertainty checking for Yokogawa... is activated' is not found."
 
     for line in ptd_log_lines:
-        find_common_problem("(?<=WARNING:).+", line, COMMON_WARNING)
-        find_common_problem("(?<=ERROR:).+", line, COMMON_ERROR)
+        find_common_problem("(?<=WARNING:).+", line, COMMON_WARNING, error=False)
+        find_common_problem("(?<=ERROR:).+", line, COMMON_ERROR, error=True)
 
 
 def check_ptd_config(server_sd: SessionDescriptor) -> None:
@@ -606,16 +624,25 @@ def debug_check(server_sd: SessionDescriptor) -> None:
     ), "Server was running in debug mode"
 
 
-def check_with_logging(check_name: str, check: Callable[[], None]) -> bool:
+def check_with_logging(check_name: str, check: Callable[[], None]) -> Tuple[bool, bool]:
     try:
         check()
-    except Exception as e:
+    except AssertionError as e:
         print(f"[ ] {check_name}")
         print(f"\t{e}\n")
-        return False
+        return False, False
+    except CheckerWarning as e:
+        print(f"[x] {check_name}")
+        print(f"\t{e}\n")
+        return True, True
+    except Exception:
+        print(f"[ ] {check_name}")
+        print("Unhandled exeception:")
+        traceback.print_exc()
+        return False, False
     else:
         print(f"[x] {check_name}")
-    return True
+    return True, False
 
 
 def check(path: str) -> int:
@@ -637,11 +664,19 @@ def check(path: str) -> int:
     }
 
     result = True
+    warnings = False
 
     for description in check_with_description.keys():
-        result &= check_with_logging(description, check_with_description[description])
+        check_result, check_warnings = check_with_logging(
+            description, check_with_description[description]
+        )
+        result &= check_result
+        warnings |= check_warnings
 
-    print(f"\n{'All' if result else 'ERROR: Not all'} checks passed")
+    print(
+        f"\n{'All' if result else 'ERROR: Not all'} checks passed"
+        f"{'. Warnings encountered, check for audit!' if warnings else ''}"
+    )
 
     return 0 if result else 1
 
