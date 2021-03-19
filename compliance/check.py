@@ -62,7 +62,6 @@ RESULT_PATHS = [
 ]
 
 COMMON_ERROR = "Can't evaluate uncertainty of this sample!"
-COMMON_WARNING = "Uncertainty unknown for the last measurement sample!"
 
 
 def _normalize(path: str) -> str:
@@ -507,9 +506,7 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     with open(file_path, "r") as f:
         ptd_log_lines = f.readlines()
 
-    def find_common_problem(
-        reg_exp: str, line: str, common_problem: str, error: bool
-    ) -> None:
+    def find_error_or_warning(reg_exp: str, line: str, error: bool) -> None:
         problem_line = re.search(reg_exp, line)
 
         if problem_line and problem_line.group(0):
@@ -518,9 +515,12 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
                 assert False, "Can not find ranging time in ptd_logs.txt."
             if error:
                 assert (
-                    problem_line.group(0).strip().startswith(common_problem)
-                    and start_ranging_time < log_time < stop_ranging_time
+                    start_ranging_time < log_time < stop_ranging_time
                 ), f"{line.strip()!r} in ptd_log.txt"
+                if not problem_line.group(0).strip().startswith(COMMON_ERROR):
+                    raise CheckerWarning(
+                        f"{line.strip()!r} in ptd_log.txt during ranging stage. Treated as WARNING"
+                    )
             else:
                 if start_load_time < log_time < stop_load_time:
                     raise CheckerWarning(
@@ -582,8 +582,8 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     ), "ptd_logs.txt: Line 'Uncertainty checking for Yokogawa... is activated' is not found."
 
     for line in ptd_log_lines:
-        find_common_problem("(?<=WARNING:).+", line, COMMON_WARNING, error=False)
-        find_common_problem("(?<=ERROR:).+", line, COMMON_ERROR, error=True)
+        find_error_or_warning("(?<=WARNING:).+", line, error=False)
+        find_error_or_warning("(?<=ERROR:).+", line, error=True)
 
 
 def check_ptd_config(server_sd: SessionDescriptor) -> None:
