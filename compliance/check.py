@@ -521,10 +521,13 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
             if start_ranging_time is None or stop_ranging_time is None:
                 assert False, "Can not find ranging time in ptd_logs.txt."
             if error:
-                assert (
-                    problem_line.group(0).strip().startswith(common_problem)
-                    and start_ranging_time < log_time < stop_ranging_time
-                ), f"{line.strip()!r} in ptd_log.txt"
+                if start_ranging_time < log_time < stop_ranging_time:
+                    if not problem_line.group(0).strip().startswith(common_problem):
+                        raise CheckerWarning(
+                            f"{line.strip()!r} in ptd_log.txt during ranging stage. Treated as WARNING"
+                        )
+                else:
+                    assert False, f"{line.strip()!r} in ptd_log.txt"
             else:
                 if start_load_time < log_time < stop_load_time:
                     raise CheckerWarning(
