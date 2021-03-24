@@ -265,12 +265,12 @@ def uuid_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -> No
 
 
 def _get_begin_end_time_from_mlperf_log_detail(
-    path: str, server_sd: SessionDescriptor
+    path: str, client_sd: SessionDescriptor
 ) -> Tuple[float, float]:
     system_begin = None
     system_end = None
 
-    timezone_offset = int(server_sd.json_object["timezone"])
+    timezone_offset = int(client_sd.json_object["timezone"])
 
     file = os.path.join(path, "mlperf_log_detail.txt")
 
@@ -350,11 +350,11 @@ def phases_check(
         ), f"Loadgen test end time is not within {mode} mode time interval."
 
     system_begin_r, system_end_r = _get_begin_end_time_from_mlperf_log_detail(
-        os.path.join(path, "ranging"), server_sd
+        os.path.join(path, "ranging"), client_sd
     )
 
     system_begin_t, system_end_t = _get_begin_end_time_from_mlperf_log_detail(
-        os.path.join(path, "run_1"), server_sd
+        os.path.join(path, "run_1"), client_sd
     )
 
     compare_time_boundaries(system_begin_r, system_end_r, phases_ranging_c, "ranging")
@@ -487,7 +487,9 @@ def results_check(
     result_files_compare(results, result_paths_copy, result_path)
 
 
-def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
+def check_ptd_logs(
+    server_sd: SessionDescriptor, client_sd: SessionDescriptor, path: str
+) -> None:
     """Check if ptd message starts with 'WARNING' or 'ERROR' in ptd logs.
     Check 'Uncertainty checking for Yokogawa... is activated' in PTD logs.
     """
@@ -496,7 +498,7 @@ def check_ptd_logs(server_sd: SessionDescriptor, path: str) -> None:
     ranging_mark = f"{server_sd.json_object['session_name']}_ranging"
 
     start_load_time, stop_load_time = _get_begin_end_time_from_mlperf_log_detail(
-        os.path.join(path, "run_1"), server_sd
+        os.path.join(path, "run_1"), client_sd
     )
 
     file_path = os.path.join(path, "power", "ptd_logs.txt")
@@ -661,7 +663,9 @@ def check(path: str) -> int:
         "Check time difference": lambda: phases_check(client, server, path),
         "Check client server messages": lambda: messages_check(client, server),
         "Check results checksum": lambda: results_check(server, client, path),
-        "Check errors and warnings from PTD logs": lambda: check_ptd_logs(server, path),
+        "Check errors and warnings from PTD logs": lambda: check_ptd_logs(
+            server, client, path
+        ),
         "Check PTD configuration": lambda: check_ptd_config(server),
         "Check debug is disabled on server-side": lambda: debug_check(server),
         "Check release version": lambda: version_check(),
