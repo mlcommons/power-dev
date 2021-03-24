@@ -34,9 +34,7 @@ import zipfile
 
 LOADGEN_LOG_FILE = "mlperf_log_detail.txt"
 LOADGEN_OTHER_FILES = [
-    "mlperf_log_accuracy.json",
     "mlperf_log_summary.txt",
-    "mlperf_log_trace.json",
 ]
 
 
@@ -330,7 +328,9 @@ def main() -> None:
             exit(1)
 
         logging.info(f"Copying loadgen logs from {loadgen_logs!r} to {out!r}")
-        shutil.copytree(loadgen_logs, out)
+        os.mkdir(out)
+        for file in [LOADGEN_LOG_FILE] + LOADGEN_OTHER_FILES:
+            shutil.copy(os.path.join(loadgen_logs, file), out)
 
         if args.send_logs:
             logging.info("Packing logs into zip and uploading to the server")
