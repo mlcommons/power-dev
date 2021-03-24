@@ -90,7 +90,7 @@ class Summary:
 
         result: Any = {
             "version": "1.0",  # TODO: use global version?
-            "timezone": time.timezone,
+            "timezone": -time.localtime().tm_gmtoff,
             "modules": self._modules,
             "sources": self._sources,
             "messages": self._messages,
