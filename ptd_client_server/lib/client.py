@@ -17,11 +17,14 @@
 from . import common
 from . import summary as summarylib
 from . import time_sync
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 import argparse
 import base64
 import logging
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -29,9 +32,9 @@ import time
 import uuid
 import zipfile
 
-LOADGEN_FILES = [
+LOADGEN_LOG_FILE = "mlperf_log_detail.txt"
+LOADGEN_OTHER_FILES = [
     "mlperf_log_accuracy.json",
-    "mlperf_log_detail.txt",
     "mlperf_log_summary.txt",
     "mlperf_log_trace.json",
 ]
@@ -88,14 +91,9 @@ def check_paths(loadgen_logs: str, output: str, force: bool) -> None:
         )
         exit(1)
 
-    if os.path.exists(loadgen_logs):
-        if force:
-            logging.warning(f"Removing old loadgen logs directory {loadgen_logs!r}")
-            shutil.rmtree(loadgen_logs)
-        else:
-            logging.fatal(f"The loadgen logs directory {loadgen_logs!r} already exists")
-            logging.fatal("Please remove it or specify --force argument")
-            exit(1)
+    if os.path.exists(loadgen_logs) and force:
+        logging.warning(f"Removing loadgen logs directory {loadgen_logs!r}")
+        shutil.rmtree(loadgen_logs)
 
 
 def command_get_file(server: common.Proto, command: str, save_name: str) -> None:
@@ -118,20 +116,56 @@ def create_zip(zip_filename: str, dirname: str) -> None:
                 zf.write(filePath, zipPath)
 
 
-def reorder_loadgen_files(path: str) -> None:
+def get_time_from_line(
+    line: str, data_regexp: str, file: str, timezone_offset: int
+) -> Optional[float]:
+    # TODO: deduplicate with check.py?
+    log_time_str = re.search(data_regexp, line)
+    if log_time_str and log_time_str.group(0):
+        log_datetime = datetime.strptime(log_time_str.group(0), "%m-%d-%Y %H:%M:%S.%f")
+        return log_datetime.replace(tzinfo=timezone.utc).timestamp() + timezone_offset
+    return None
+
+
+def find_loadgen_logs(
+    path: str, timezone_offset: int, time_load_start: float, time_load_end: float
+) -> Optional[str]:
     abs_path = path if os.path.isabs(path) else os.path.abspath(path)
-    for file in LOADGEN_FILES:
-        loadgen_result_file = list(Path(abs_path).rglob(file))
-        if len(loadgen_result_file) > 1:
-            logging.error(f"There are more then one {file} in {path}")
-        if len(loadgen_result_file) == 0:
-            logging.error(f"There is no {file} in {path}")
-        if os.path.dirname(loadgen_result_file[0]) != abs_path:
-            target_path = os.path.join(
-                abs_path, os.path.basename(loadgen_result_file[0])
-            )
-            logging.warning(f"Move {str(loadgen_result_file[0])!r} to {target_path!r}")
-            os.replace(loadgen_result_file[0], target_path)
+    loadgen_logs_candidates = list(Path(abs_path).rglob(LOADGEN_LOG_FILE))
+    for file in loadgen_logs_candidates:
+        power_begin = None
+        power_end = None
+        with open(file) as f:
+            for line in f:
+                if re.search("power_begin", line.lower()):
+                    power_begin = get_time_from_line(
+                        line,
+                        r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
+                        str(file),
+                        timezone_offset,
+                    )
+                elif re.search("power_end", line.lower()):
+                    power_end = get_time_from_line(
+                        line,
+                        r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
+                        str(file),
+                        timezone_offset,
+                    )
+                if power_begin and power_end:
+                    break
+        if (
+            power_begin
+            and power_end
+            and power_begin > time_load_start
+            and power_end < time_load_end
+        ):
+            logs_dir = os.path.dirname(file)
+            for other_file in LOADGEN_OTHER_FILES:
+                if other_file not in os.listdir(logs_dir):
+                    logging.error(f"There is no {other_file} in {logs_dir}")
+            return logs_dir
+
+    return None
 
 
 def main() -> None:
@@ -273,32 +307,30 @@ def main() -> None:
 
         summary.phase(mode, 1)
         logging.info(f"Running the workload {args.run_workload!r}")
+        time_load_start = time.time()
         subprocess.run(args.run_workload, shell=True, check=True)
+        time_load_end = time.time()
         summary.phase(mode, 2)
 
         command(f"session,{session},stop,{mode}", check=True)
         summary.phase(mode, 3)
 
-        if (
-            not os.path.isdir(args.loadgen_logs)
-            or len(os.listdir(args.loadgen_logs)) == 0
-        ):
+        loadgen_logs = find_loadgen_logs(
+            args.loadgen_logs, summary.timezone_offset, time_load_start, time_load_end
+        )
+
+        if not loadgen_logs:
             logging.fatal(
                 f"Expected {args.loadgen_logs!r} to be a directory containing loadgen logs, but it is not"
             )
-            exit(1)
-
-        shutil.move(args.loadgen_logs, out)
-
-        reorder_loadgen_files(out)
-
-        if len(os.listdir(out)) == 0:
-            logging.fatal(f"The directory {out!r} is empty")
             logging.fatal(
                 "Please make sure that the provided workload command writes its "
-                "output into the directory specified by environment variable $out"
+                "output into the directory specified by the --loadgen-logs/-L argument"
             )
             exit(1)
+
+        logging.info(f"Copying loadgen logs from {loadgen_logs!r} to {out!r}")
+        shutil.copytree(loadgen_logs, out)
 
         if args.send_logs:
             logging.info("Packing logs into zip and uploading to the server")
