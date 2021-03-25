@@ -61,6 +61,7 @@ if _debug:
 
 # https://github.com/mlcommons/power-dev/issues/154#issuecomment-785188217
 MULTICHANNEL_DEVICES = [48, 59, 61, 77]
+DEVICE_TYPE_WT500 = 48
 
 
 class MeasurementEndedTooFastError(Exception):
@@ -267,7 +268,7 @@ class ServerConfig:
         self.ptd_channel: Optional[List[int]] = get(
             "ptd", "channel", parse=parse_channel, fallback=None
         )
-        ptd_device_type: int = get("ptd", "deviceType", parse=int)
+        self.ptd_device_type: int = get("ptd", "deviceType", parse=int)
         ptd_interface_flag: str = get("ptd", "interfaceFlag")
         ptd_device_port: str = get("ptd", "devicePort")
         ptd_board_num: Optional[int] = get("ptd", "gpibBoard", parse=int, fallback=None)
@@ -288,13 +289,13 @@ class ServerConfig:
                 else ["-c", ",".join(str(x) for x in self.ptd_channel)]
             ),
             *([] if ptd_interface_flag == "" else [ptd_interface_flag]),
-            str(ptd_device_type),
+            str(self.ptd_device_type),
             ptd_device_port,
         ]
 
         self.ptd_summary: Dict[str, Any] = {
             "command": self.ptd_command,
-            "device_type": ptd_device_type,
+            "device_type": self.ptd_device_type,
             "interface_flag": ptd_interface_flag,
             "device_port": ptd_device_port,
             "channel": self.ptd_channel,
@@ -315,9 +316,9 @@ class ServerConfig:
             )
 
         # Check configuration
-        self._check(filename, ptd_device_type)
+        self._check(filename)
 
-    def _check(self, filename: str, ptd_device_type: int) -> None:
+    def _check(self, filename: str) -> None:
         path = Path(self.ptd_logfile)
         if not (path.parent.exists()):
             exit_with_error_msg(
@@ -329,17 +330,27 @@ class ServerConfig:
                 f"The PTDaemon port {self.ptd_port} is already occupied."
             )
 
-        if ptd_device_type in MULTICHANNEL_DEVICES:
-            if not self.ptd_channel or (
-                self.ptd_channel and len(self.ptd_channel) != 2
-            ):
+        if self.ptd_device_type in MULTICHANNEL_DEVICES:
+            if not self.ptd_channel:
                 exit_with_error_msg(
-                    f"{filename}: 'channel' value should consist of two numbers for a multichannel device {ptd_device_type}."
+                    f"{filename}: 'channel' value should be set for"
+                    f" a multichannel device {self.ptd_device_type}."
+                )
+            if self.ptd_device_type == DEVICE_TYPE_WT500 and len(self.ptd_channel) != 1:
+                exit_with_error_msg(
+                    f"{filename}: 'channel' value should consist of one number"
+                    f" for a multichannel device {self.ptd_device_type} (Yokogawa WT500)."
+                )
+            if len(self.ptd_channel) != 2:
+                exit_with_error_msg(
+                    f"{filename}: 'channel' value should consist of two numbers"
+                    f" for a multichannel device {self.ptd_device_type}."
                 )
         else:
             if self.ptd_channel and len(self.ptd_channel) != 1:
                 exit_with_error_msg(
-                    f"{filename}: 'channel' value should consist of one number or be disabled for a 1-channel device {ptd_device_type}."
+                    f"{filename}: 'channel' value should consist of one number"
+                    f" or be disabled for a 1-channel device {self.ptd_device_type}."
                 )
 
 
@@ -845,9 +856,13 @@ class Session:
                 channels_amount = 0
 
                 if self._server._config.ptd_channel is not None:
-                    start_channel = self._server._config.ptd_channel[0]
-                    if len(self._server._config.ptd_channel) == 2:
-                        channels_amount = self._server._config.ptd_channel[1]
+                    if self._server._config.ptd_device_type == DEVICE_TYPE_WT500:
+                        start_channel = 1
+                        channels_amount = self._server._config.ptd_channel[0]
+                    else:
+                        start_channel = self._server._config.ptd_channel[0]
+                        if len(self._server._config.ptd_channel) == 2:
+                            channels_amount = self._server._config.ptd_channel[1]
 
                 self._maxVolts, self._maxAmps = max_volts_amps(
                     self._server._config.ptd_logfile,
