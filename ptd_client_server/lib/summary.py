@@ -38,6 +38,7 @@ class Summary:
         self.session_name: Optional[str] = None
         self.client_uuid: Optional[uuid.UUID] = None
         self.server_uuid: Optional[uuid.UUID] = None
+        self.timezone_offset = -time.localtime().tm_gmtoff
         self._messages: List[Any] = []
         self.ptd_messages: "Optional[PtdMessages]" = None
         self._results: Optional[Dict[str, str]] = None
@@ -90,7 +91,7 @@ class Summary:
 
         result: Any = {
             "version": "1.0",  # TODO: use global version?
-            "timezone": -time.localtime().tm_gmtoff,
+            "timezone": self.timezone_offset,
             "modules": self._modules,
             "sources": self._sources,
             "messages": self._messages,
