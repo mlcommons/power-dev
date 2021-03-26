@@ -21,15 +21,15 @@ import subprocess
 import sys
 import time
 
-from .external import ntplib  # type: ignore
+from ptd_client_server.lib.external import ntplib  # type: ignore
 
 
 CRITICAL_DIFFERENCE_TIME_MS = 200
 
 
 def get_ntp_response(server: str) -> Any:
-    ntp_client = ntplib.NTPClient()
-    return ntp_client.request(server, version=4)
+    ntp_client = ntplib.NTPClient()  # type: ignore
+    return ntp_client.request(server, version=4)  # type: ignore
 
 
 def validate_ntp(server: str) -> bool:

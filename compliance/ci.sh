@@ -30,7 +30,7 @@ ci_black() {
 }
 
 ci_mypy() {
-	mypy --allow-redefinition --strict --pretty --no-warn-unused-ignores .
+	mypy --allow-redefinition --strict --pretty --no-warn-unused-ignores . helper
 }
 
 cd "$(dirname "${BASH_SOURCE[0]}")"

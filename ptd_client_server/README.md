@@ -56,6 +56,12 @@ For the second option, you need to have the following prerequisites.
 
 `git clone https://github.com/mlcommons/power`
 
+or
+
+`pip install git+https://github.com/mlcommons/power-dev`
+
+(also see INSTALL.md).
+
 ## Configuration
 
 The server requires the configuration file to be passed using the `-c` command line argument.
@@ -177,8 +183,13 @@ Start a server (on a director):
 ```sh
 ./server.py -c server-config.conf
 ```
+or (if installed with pip):
+```sh
+power_server -c server-config.conf
+```
 
-Then on the SUT, provide a workload script for your particular workload and run it using `client.py`.
+Then on the SUT, provide a workload script for your particular workload and run it using `client.py`
+(or `power_client` if installed with pip).
 Choose an option below for the example of workload script.
 
 <details><summary>Example option 1: a dummy workload</summary>

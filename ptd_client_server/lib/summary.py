@@ -19,7 +19,7 @@ import json
 import time
 import uuid
 
-from . import source_hashes
+from ptd_client_server.lib import source_hashes
 
 
 class _JsonEncoder(json.JSONEncoder):

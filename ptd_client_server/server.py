@@ -14,7 +14,12 @@
 # limitations under the License.
 # =============================================================================
 
-from lib import server, source_hashes
+import os
+import sys
+
+sys.path.insert(1, os.path.join(os.path.dirname(__file__), ".."))
+
+from ptd_client_server.lib import server, source_hashes  # noqa
 
 source_hashes.init()
 
