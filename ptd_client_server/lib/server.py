@@ -61,6 +61,7 @@ if _debug:
 
 # https://github.com/mlcommons/power-dev/issues/154#issuecomment-785188217
 MULTICHANNEL_DEVICES = [48, 59, 61, 77]
+# https://github.com/mlcommons/power-dev/issues/220#issue-835336923
 DEVICE_TYPE_WT500 = 48
 
 
