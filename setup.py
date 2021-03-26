@@ -20,5 +20,7 @@ setup(
     url="https://github.com/mlcommons/power-dev/",
     license="LICENSE.md",
     description="MLPerf Power Measurement",
-    requires=[],
+    install_requires=[
+        'pywin32;platform_system=="Windows"'
+    ],
 )

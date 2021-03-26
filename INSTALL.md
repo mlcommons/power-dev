@@ -1,6 +1,7 @@
 ## Installation
 
-Do `pip install .` or `easy_install .` or `./setup.py install`.
+Do `pip install git+https://github.com/mlcommons/power-dev`
+or clone and do `pip install .` or `easy_install .` or `./setup.py install`.
 Then you can run `power_server`, `power_client` and `power_check`
 from the command line.
 
