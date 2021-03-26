@@ -32,11 +32,12 @@ ci_black() {
 }
 
 ci_mypy() {
-	mypy --allow-redefinition --strict --pretty --no-warn-unused-ignores .
+	(cd ..; mypy --allow-redefinition --strict --pretty --no-warn-unused-ignores \
+		-p ptd_client_server)
 }
 
 ci_pytest() {
-	python -m pytest
+	(cd ..; python -m pytest ptd_client_server)
 }
 
 cd "$(dirname "${BASH_SOURCE[0]}")"

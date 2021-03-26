@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 import socket
 
-from lib import server
+from ptd_client_server.lib import server
 
 
 def test_parse_listen() -> None:

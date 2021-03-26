@@ -15,16 +15,23 @@
 
 from pathlib import Path
 import json
+import os
 import shutil
 import subprocess
 import sys
 
 
 def test_foo(tmp_path: Path) -> None:
+    os.mkdir(tmp_path / "ptd_client_server")
+    tmp_path = tmp_path / "ptd_client_server"
+    shutil.copy(Path(__file__).parent.parent.parent / "__init__.py", tmp_path)
     shutil.copytree(Path(__file__).parent.parent.parent / "lib", tmp_path / "lib")
     with open(tmp_path / "main.py", "wb") as f:
         f.write(
-            b"from lib import source_hashes\n"
+            b"import os\n"
+            b"import sys\n"
+            b"sys.path.insert(1, os.path.join(os.path.dirname(__file__), '..'))\n"
+            b"from ptd_client_server.lib import source_hashes\n"
             b"import json\n"
             b"source_hashes.init()\n"
             b"print(json.dumps(source_hashes.get()))\n"

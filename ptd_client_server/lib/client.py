@@ -14,9 +14,9 @@
 # =============================================================================
 
 
-from . import common
-from . import summary as summarylib
-from . import time_sync
+from ptd_client_server.lib import common
+from ptd_client_server.lib import summary as summarylib
+from ptd_client_server.lib import time_sync
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional

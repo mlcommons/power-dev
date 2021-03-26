@@ -24,7 +24,7 @@ import sys
 
 _source_hashes: object = None
 
-_module_name = "lib"
+_module_name = "ptd_client_server.lib"
 
 
 def get() -> object:
@@ -47,7 +47,7 @@ def init() -> None:
 
     assert _source_hashes is None, "init() already called"
 
-    base_dir = pathlib.Path(sys.modules["__main__"].__file__).parent
+    base_dir = pathlib.Path(__file__).parent.parent
 
     result: Any = {
         "sources": {},
@@ -57,11 +57,7 @@ def init() -> None:
     result["sources"] = get_sources_checksum(base_dir)
 
     for name, module in sys.modules.items():
-        if not (
-            name == "__main__"
-            or name == _module_name
-            or name.startswith(_module_name + ".")
-        ):
+        if not (name == _module_name or name.startswith(_module_name + ".")):
             continue
 
         try:

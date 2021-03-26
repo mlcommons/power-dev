@@ -25,7 +25,7 @@ import string
 import sys
 import time
 
-from . import source_hashes
+from ptd_client_server.lib import source_hashes
 
 
 DEFAULT_PORT = 4950
