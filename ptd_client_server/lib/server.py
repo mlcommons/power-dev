@@ -639,36 +639,6 @@ class Server:
             if cmd == ["stop", "testing"]:
                 return unbool[self.session.stop(Mode.TESTING)]
 
-            if (
-                len(cmd) == 2
-                and cmd[0] == "upload"
-                and cmd[1] in ["ranging", "testing", "client.json", "client.log"]
-            ):
-                fname = os.path.join(
-                    self._config.out_dir, self.session._id + cmd[1] + ".tmp"
-                )
-                result = False
-                try:
-                    p.recv_file(fname)
-                    if cmd[1] == "ranging":
-                        result = self.session.upload(Mode.RANGING, fname)
-                    elif cmd[1] == "testing":
-                        result = self.session.upload(Mode.TESTING, fname)
-                    elif cmd[1] in ("client.json", "client.log"):
-                        shutil.copyfile(
-                            fname, os.path.join(self.session.power_logs, cmd[1])
-                        )
-                        result = True
-                    else:
-                        result = False
-                finally:
-                    try:
-                        os.remove(fname)
-                        logging.info(f"Removed {fname!r}")
-                    except OSError:
-                        pass
-                return unbool[result]
-
             if cmd == ["done"]:
                 self._drop_session()
                 return "OK"
@@ -683,6 +653,11 @@ class Server:
             assert self._last_session_dir_path is not None
             p.send_file(os.path.join(self._last_session_dir_path, cmd[2]))
             return None
+
+        if cmd[0] == "cleanup" and cmd[1] == self._last_session:
+            assert self._last_session_dir_path is not None
+            shutil.rmtree(self._last_session_dir_path)
+            return "OK"
 
         return "Error"
 

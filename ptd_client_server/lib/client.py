@@ -205,12 +205,6 @@ def main() -> None:
         "-l", "--label", metavar="LABEL", type=str, default="",
         help="a label to include into the resulting directory name")
     parser.add_argument(
-        "-s", "--send-logs", action="store_true",
-        help="send loadgen logs to the server")
-    parser.add_argument(
-        "-F", "--fetch-logs", action="store_true",
-        help="fetch logs from the server")
-    parser.add_argument(
         "-f", "--force", action="store_true",
         help="force remove loadgen logs directory (INDIR)")
     parser.add_argument(
@@ -332,35 +326,21 @@ def main() -> None:
         for file in [LOADGEN_LOG_FILE] + LOADGEN_OTHER_FILES:
             shutil.copy(os.path.join(loadgen_logs, file), out)
 
-        if args.send_logs:
-            logging.info("Packing logs into zip and uploading to the server")
-            create_zip(f"{out}.zip", out)
-            logging.info(
-                "Zip file size: " + common.human_bytes(os.stat(f"{out}.zip").st_size)
-            )
-            command.upload(f"session,{session},upload,{mode}", f"{out}.zip")
-            os.remove(f"{out}.zip")
-
     logging.info("Done runs")
 
     client_log_path = os.path.join(power_dir, "client.log")
     common.log_redirect.stop(client_log_path)
-
-    command.upload(f"session,{session},upload,client.log", client_log_path)
 
     summary.hash_results(out_dir)
 
     client_json_path = os.path.join(power_dir, "client.json")
     summary.save(client_json_path)
 
-    command.upload(f"session,{session},upload,client.json", client_json_path)
-
     command(f"session,{session},done", check=True)
 
-    if args.fetch_logs:
-        for fname in common.FETCH_FILES_LIST:
-            command.download(
-                f"download,{session},{fname}", os.path.join(out_dir, fname)
-            )
+    for fname in common.FETCH_FILES_LIST:
+        command.download(f"download,{session},{fname}", os.path.join(out_dir, fname))
+
+    command(f"cleanup,{session}", check=True)
 
     logging.info("Successful exit")
