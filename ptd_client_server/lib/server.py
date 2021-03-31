@@ -65,12 +65,14 @@ MULTICHANNEL_DEVICES = [48, 59, 61, 77]
 DEVICE_TYPE_WT500 = 48
 
 MAX_RANGE_FOR_DEVICE = {
-    8: 20,
-    35: 50,
-    48: 50,
-    49: 20,
-    52: 20,
-    77: 20,
+    8: 20,  # WT210
+    49: 20,  # WT310
+    52: 20,  # WT330
+    77: 20,  # WT330_multichannel
+    35: 40,  # WT500
+    48: 40,  # WT500_multichannel
+    47: 50,  # WT1800
+    66: 30,  # WT5000
 }
 
 
