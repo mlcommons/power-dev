@@ -30,7 +30,6 @@ import socket
 import subprocess
 import time
 import uuid
-import zipfile
 
 LOADGEN_LOG_FILE = "mlperf_log_detail.txt"
 LOADGEN_OTHER_FILES = [
@@ -57,15 +56,6 @@ class CommandSender:
             exit(1)
         self._summary.message((command, time_command), (response, time_response))
         return response
-
-    def upload(self, command: str, fname: str) -> None:
-        time_command = time.time()
-        self._server.send(command)
-        self._server.send_file(fname)
-        response = self._server.recv()
-        time_response = time.time()
-        logging.info(f"Got response: {response!r}")
-        self._summary.message((command, time_command), (response, time_response))
 
     def download(self, command: str, fname: str) -> None:
         logging.info(f"Fetching file {fname!r}")
@@ -103,15 +93,6 @@ def command_get_file(server: common.Proto, command: str, save_name: str) -> None
     with open(save_name, "wb") as f:
         f.write(base64.b64decode(log[len("base64 ") :]))
     logging.info(f"Saving response to {save_name!r}")
-
-
-def create_zip(zip_filename: str, dirname: str) -> None:
-    with zipfile.ZipFile(zip_filename, "x", zipfile.ZIP_DEFLATED) as zf:
-        for folderName, subfolders, filenames in os.walk(dirname):
-            for filename in filenames:
-                filePath = os.path.join(folderName, filename)
-                zipPath = os.path.relpath(filePath, dirname)
-                zf.write(filePath, zipPath)
 
 
 def get_time_from_line(

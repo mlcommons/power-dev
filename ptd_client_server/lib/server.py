@@ -17,7 +17,6 @@ from __future__ import annotations
 from decimal import Decimal
 from enum import Enum
 from ipaddress import ip_address
-from pathlib import Path
 from typing import Any, Callable, Optional, Dict, Tuple, List, Set, NoReturn
 import argparse
 import atexit
@@ -35,7 +34,6 @@ import tempfile
 import threading
 import time
 import uuid
-import zipfile
 
 from ptd_client_server.lib import common
 from ptd_client_server.lib import summary as summarylib
@@ -870,33 +868,9 @@ class Session:
         # Unexpected state
         return False
 
-    def upload(self, mode: Mode, fname: str) -> bool:
-        if mode == Mode.RANGING and self._state == SessionState.RANGING_DONE:
-            dirname = os.path.join(self.log_dir_path, "ranging")
-            return self._extract(fname, dirname)
-        if mode == Mode.TESTING and self._state == SessionState.TESTING_DONE:
-            dirname = os.path.join(self.log_dir_path, "run_1")
-            return self._extract(fname, dirname)
-
-        # Unexpected state
-        return False
-
     def drop(self) -> None:
         self._ptd.terminate()
         self._state = SessionState.DONE
-
-    def _extract(self, fname: str, dirname: str) -> bool:
-        try:
-            with zipfile.ZipFile(fname, "r") as zf:
-                zf.extractall(dirname)
-            logging.info(f"Extracted {fname!r} into {dirname!r}")
-            return True
-        except Exception:
-            logging.exception(
-                f"Got an exception while extracting {fname!r} into {dirname!r}"
-            )
-
-        return False
 
 
 def main() -> None:
