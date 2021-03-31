@@ -31,6 +31,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -275,7 +276,8 @@ class ServerConfig:
         ptd_board_num: Optional[int] = get("ptd", "gpibBoard", parse=int, fallback=None)
         # TODO: validate ptd_interface_flag?
         # TODO: validate ptd_device_type?
-        self.ptd_logfile: str = get("ptd", "logfile")
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.ptd_logfile: str = os.path.join(self.tmp_dir.name, "ptd_logfile.txt")
         self.ptd_port: int = get("ptd", "networkPort", parse=int, fallback="8888")
         self.ptd_command: List[str] = [
             get("ptd", "ptd"),
@@ -320,12 +322,6 @@ class ServerConfig:
         self._check(filename)
 
     def _check(self, filename: str) -> None:
-        path = Path(self.ptd_logfile)
-        if not (path.parent.exists()):
-            exit_with_error_msg(
-                f"{filename}: {str(path.parent)!r} does not exist. Please create {str(path.parent)!r} folder."
-            )
-
         if tcp_port_is_occupied(self.ptd_port):
             exit_with_error_msg(
                 f"The PTDaemon port {self.ptd_port} is already occupied."
@@ -683,6 +679,7 @@ class Server:
             summary.save(os.path.join(power_logs, "server.json"))
 
     def close(self) -> None:
+        self._config.tmp_dir.cleanup()
         self._drop_session()
 
 
