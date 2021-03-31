@@ -254,8 +254,10 @@ class ServerConfig:
             else:
                 return val
 
+        self.tmp_dir = tempfile.TemporaryDirectory()
+
         self.ntp_server: str = get("server", "ntpServer")
-        self.out_dir: str = get("server", "outDir")
+        self.out_dir: str = self.tmp_dir.name
         self.host: str
         self.port: int
         self.host, self.port = get(
@@ -274,7 +276,6 @@ class ServerConfig:
         ptd_board_num: Optional[int] = get("ptd", "gpibBoard", parse=int, fallback=None)
         # TODO: validate ptd_interface_flag?
         # TODO: validate ptd_device_type?
-        self.tmp_dir = tempfile.TemporaryDirectory()
         self.ptd_logfile: str = os.path.join(self.tmp_dir.name, "ptd_logfile.txt")
         self.ptd_port: int = get("ptd", "networkPort", parse=int, fallback="8888")
         self.ptd_command: List[str] = [
