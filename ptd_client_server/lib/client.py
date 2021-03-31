@@ -180,6 +180,14 @@ def main() -> None:
         help="NTP server address")
 
     parser.add_argument(
+        "-T", "--no-timestamp-path", action="store_true",
+        help="don't add timestamp to the logs path"
+    )
+    parser.add_argument(
+        "-t", "--timestamp-path", action="store_false", dest="no_timestamp_path",
+        help="add timestamp to the logs path [default]"
+    )
+    parser.add_argument(
         "-p", "--port", metavar="PORT", type=int, default=4950,
         help="server port, defaults to 4950")
     parser.add_argument(
@@ -264,9 +272,13 @@ def main() -> None:
     logging.info(f"Session id is {session!r}")
 
     common.log_sources()
-    out_dir = os.path.join(args.output, session)
-    power_dir = os.path.join(args.output, session, "power")
-    os.mkdir(out_dir)
+    if args.no_timestamp_path:
+        out_dir = args.output
+        power_dir = os.path.join(args.output, "power")
+    else:
+        out_dir = os.path.join(args.output, session)
+        os.mkdir(out_dir)
+        power_dir = os.path.join(args.output, session, "power")
     os.mkdir(power_dir)
 
     for mode in ["ranging", "testing"]:
