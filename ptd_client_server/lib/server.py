@@ -384,6 +384,8 @@ class Ptd:
         logging.info(f"Running PTDaemon: {self._command}")
 
         self._tee = Tee(os.path.join(self._log_dir_path, "ptd_logs.txt"))
+        env = os.environ
+        env["TZ"] = "UTC"
         if sys.platform == "win32":
             # creationflags=subprocess.CREATE_NEW_PROCESS_GROUP:
             #   We do not want to pass ^C from the current console to the
@@ -395,6 +397,7 @@ class Ptd:
                 universal_newlines=True,
                 stdout=self._tee.w,
                 stderr=subprocess.STDOUT,
+                env=env,
             )
         else:
             self._process = subprocess.Popen(
@@ -403,6 +406,7 @@ class Ptd:
                 universal_newlines=True,
                 stdout=self._tee.w,
                 stderr=subprocess.STDOUT,
+                env=env,
             )
         self._tee.started()
 
