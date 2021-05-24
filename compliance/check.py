@@ -195,7 +195,7 @@ def ptd_messages_check(sd: SessionDescriptor) -> None:
     ), f"PTD version {version!r} is not supported. Supported versions are 1.9.1 and 1.9.2"
     assert (
         power_meter_model in SUPPORTED_MODEL.values()
-    ), f"Power meter {power_meter_model!r} is not supportable. Only {', '.join(SUPPORTED_MODEL.values())} are supported."
+    ), f"Power meter {power_meter_model!r} is not supported. Only {', '.join(SUPPORTED_MODEL.values())} are supported."
 
     def check_reply(cmd: str, reply: str) -> None:
         stop_counter = 0
