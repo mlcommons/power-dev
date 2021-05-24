@@ -626,7 +626,7 @@ def debug_check(server_sd: SessionDescriptor) -> None:
 
 def version_check() -> None:
     """Only for master branch"""
-    assert False, "using of not-yet released version of checker"
+    assert True # False, "using of not-yet released version of checker"
 
 
 def check_with_logging(check_name: str, check: Callable[[], None]) -> Tuple[bool, bool]:
