@@ -36,13 +36,13 @@ class CheckerWarning(Exception):
 
 SUPPORTED_VERSION = ["1.9.1", "1.9.2"]
 SUPPORTED_MODEL = {
-    "YokogawaWT210" : 8,
-    "YokogawaWT500" : 35,
-    "YokogawaWT500_multichannel" : 48,
+    "YokogawaWT210": 8,
+    "YokogawaWT500": 35,
+    "YokogawaWT500_multichannel": 48,
     "YokogawaWT310": 49,
     "YokogawaWT310E": 49,
     "YokogawaWT330E": 52,
-    "YokogawaWT330_multichannel" : 77,
+    "YokogawaWT330_multichannel": 77,
 }
 
 RANGING_MODE = "ranging"
