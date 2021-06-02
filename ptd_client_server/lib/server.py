@@ -17,7 +17,6 @@ from __future__ import annotations
 from decimal import Decimal
 from enum import Enum
 from ipaddress import ip_address
-from pathlib import Path
 from typing import Any, Callable, Optional, Dict, Tuple, List, Set, NoReturn
 import argparse
 import atexit
@@ -31,10 +30,10 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
-import zipfile
 
 from ptd_client_server.lib import common
 from ptd_client_server.lib import summary as summarylib
@@ -266,8 +265,10 @@ class ServerConfig:
             else:
                 return val
 
+        self.tmp_dir = tempfile.TemporaryDirectory()
+
         self.ntp_server: str = get("server", "ntpServer")
-        self.out_dir: str = get("server", "outDir")
+        self.out_dir: str = self.tmp_dir.name
         self.host: str
         self.port: int
         self.host, self.port = get(
@@ -286,7 +287,7 @@ class ServerConfig:
         ptd_board_num: Optional[int] = get("ptd", "gpibBoard", parse=int, fallback=None)
         # TODO: validate ptd_interface_flag?
         # TODO: validate ptd_device_type?
-        self.ptd_logfile: str = get("ptd", "logfile")
+        self.ptd_logfile: str = os.path.join(self.tmp_dir.name, "ptd_logfile.txt")
         self.ptd_port: int = get("ptd", "networkPort", parse=int, fallback="8888")
         self.ptd_command: List[str] = [
             get("ptd", "ptd"),
@@ -331,12 +332,6 @@ class ServerConfig:
         self._check(filename)
 
     def _check(self, filename: str) -> None:
-        path = Path(self.ptd_logfile)
-        if not (path.parent.exists()):
-            exit_with_error_msg(
-                f"{filename}: {str(path.parent)!r} does not exist. Please create {str(path.parent)!r} folder."
-            )
-
         if tcp_port_is_occupied(self.ptd_port):
             exit_with_error_msg(
                 f"The PTDaemon port {self.ptd_port} is already occupied."
@@ -654,36 +649,6 @@ class Server:
             if cmd == ["stop", "testing"]:
                 return unbool[self.session.stop(Mode.TESTING)]
 
-            if (
-                len(cmd) == 2
-                and cmd[0] == "upload"
-                and cmd[1] in ["ranging", "testing", "client.json", "client.log"]
-            ):
-                fname = os.path.join(
-                    self._config.out_dir, self.session._id + cmd[1] + ".tmp"
-                )
-                result = False
-                try:
-                    p.recv_file(fname)
-                    if cmd[1] == "ranging":
-                        result = self.session.upload(Mode.RANGING, fname)
-                    elif cmd[1] == "testing":
-                        result = self.session.upload(Mode.TESTING, fname)
-                    elif cmd[1] in ("client.json", "client.log"):
-                        shutil.copyfile(
-                            fname, os.path.join(self.session.power_logs, cmd[1])
-                        )
-                        result = True
-                    else:
-                        result = False
-                finally:
-                    try:
-                        os.remove(fname)
-                        logging.info(f"Removed {fname!r}")
-                    except OSError:
-                        pass
-                return unbool[result]
-
             if cmd == ["done"]:
                 self._drop_session()
                 return "OK"
@@ -698,6 +663,11 @@ class Server:
             assert self._last_session_dir_path is not None
             p.send_file(os.path.join(self._last_session_dir_path, cmd[2]))
             return None
+
+        if cmd[0] == "cleanup" and cmd[1] == self._last_session:
+            assert self._last_session_dir_path is not None
+            shutil.rmtree(self._last_session_dir_path)
+            return "OK"
 
         return "Error"
 
@@ -723,6 +693,7 @@ class Server:
             summary.save(os.path.join(power_logs, "server.json"))
 
     def close(self) -> None:
+        self._config.tmp_dir.cleanup()
         self._drop_session()
 
 
@@ -918,33 +889,9 @@ class Session:
         # Unexpected state
         return False
 
-    def upload(self, mode: Mode, fname: str) -> bool:
-        if mode == Mode.RANGING and self._state == SessionState.RANGING_DONE:
-            dirname = os.path.join(self.log_dir_path, "ranging")
-            return self._extract(fname, dirname)
-        if mode == Mode.TESTING and self._state == SessionState.TESTING_DONE:
-            dirname = os.path.join(self.log_dir_path, "run_1")
-            return self._extract(fname, dirname)
-
-        # Unexpected state
-        return False
-
     def drop(self) -> None:
         self._ptd.terminate()
         self._state = SessionState.DONE
-
-    def _extract(self, fname: str, dirname: str) -> bool:
-        try:
-            with zipfile.ZipFile(fname, "r") as zf:
-                zf.extractall(dirname)
-            logging.info(f"Extracted {fname!r} into {dirname!r}")
-            return True
-        except Exception:
-            logging.exception(
-                f"Got an exception while extracting {fname!r} into {dirname!r}"
-            )
-
-        return False
 
 
 def main() -> None:
