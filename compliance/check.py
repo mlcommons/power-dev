@@ -36,12 +36,13 @@ class CheckerWarning(Exception):
 
 SUPPORTED_VERSION = ["1.9.1", "1.9.2"]
 SUPPORTED_MODEL = {
-    8: "YokogawaWT210",
-    35: "YokogawaWT500",
-    48: "YokogawaWT500_multichannel",
-    49: "YokogawaWT310",
-    52: "YokogawaWT330E",
-    77: "YokogawaWT330_multichannel",
+    "YokogawaWT210": 8,
+    "YokogawaWT500": 35,
+    "YokogawaWT500_multichannel": 48,
+    "YokogawaWT310": 49,
+    "YokogawaWT310E": 49,
+    "YokogawaWT330E": 52,
+    "YokogawaWT330_multichannel": 77,
 }
 
 RANGING_MODE = "ranging"
@@ -194,8 +195,8 @@ def ptd_messages_check(sd: SessionDescriptor) -> None:
         version in SUPPORTED_VERSION
     ), f"PTD version {version!r} is not supported. Supported versions are 1.9.1 and 1.9.2"
     assert (
-        power_meter_model in SUPPORTED_MODEL.values()
-    ), f"Power meter {power_meter_model!r} is not supportable. Only {', '.join(SUPPORTED_MODEL.values())} are supported."
+        power_meter_model in SUPPORTED_MODEL.keys()
+    ), f"Power meter {power_meter_model!r} is not supported. Only {', '.join(SUPPORTED_MODEL.keys())} are supported."
 
     def check_reply(cmd: str, reply: str) -> None:
         stop_counter = 0
@@ -596,9 +597,9 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
 
     dev_num = ptd_config["device_type"]
     assert (
-        dev_num in SUPPORTED_MODEL.keys()
+        dev_num in SUPPORTED_MODEL.values()
     ), f"Device number {dev_num} is not supported. Supported numbers are " + ", ".join(
-        [str(i) for i in SUPPORTED_MODEL.keys()]
+        [str(i) for i in set(SUPPORTED_MODEL.values())]
     )
 
     if dev_num == 77:
@@ -610,11 +611,17 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
                 channels = command[i + 1]
                 break
 
+        dev_name = ""
+        for name, num in SUPPORTED_MODEL.items():
+            if num == dev_num:
+                dev_name = name
+                break
+
         assert (
             len(channels.split(",")) == 2
             and ptd_config["channel"]
             and len(ptd_config["channel"]) == 2
-        ), f"Expected multichannel mode for {SUPPORTED_MODEL[dev_num]}, but got 1-channel."
+        ), f"Expected multichannel mode for {dev_name}, but got 1-channel."
 
 
 def debug_check(server_sd: SessionDescriptor) -> None:
