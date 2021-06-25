@@ -107,7 +107,7 @@ def get_time_from_line(
 
 
 def find_loadgen_logs(
-    path: str, timezone_offset: int, time_load_start: float, time_load_end: float
+    path: str, time_load_start: float, time_load_end: float
 ) -> Optional[str]:
     abs_path = path if os.path.isabs(path) else os.path.abspath(path)
     loadgen_logs_candidates = list(Path(abs_path).rglob(LOADGEN_LOG_FILE))
@@ -121,14 +121,14 @@ def find_loadgen_logs(
                         line,
                         r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
                         str(file),
-                        timezone_offset,
+                        0,
                     )
                 elif re.search("power_end", line.lower()):
                     power_end = get_time_from_line(
                         line,
                         r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
                         str(file),
-                        timezone_offset,
+                        0,
                     )
                 if power_begin and power_end:
                     break
@@ -301,7 +301,7 @@ def main() -> None:
         summary.phase(mode, 3)
 
         loadgen_logs = find_loadgen_logs(
-            args.loadgen_logs, summary.timezone_offset, time_load_start, time_load_end
+            args.loadgen_logs, time_load_start, time_load_end
         )
 
         if not loadgen_logs:
