@@ -384,8 +384,8 @@ def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -
     mc = client_sd.json_object["messages"]
     ms = server_sd.json_object["messages"]
 
-    assert (
-        len(mc) == len(ms)
+    assert len(mc) == len(
+        ms
     ), f"Client commands list length ({len(mc)}) should be equal to server commands list length ({len(ms)}). "
 
     # Check that server.json contains all client.json messages and replies.
