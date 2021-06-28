@@ -271,8 +271,6 @@ def _get_begin_end_time_from_mlperf_log_detail(
     system_begin = None
     system_end = None
 
-    timezone_offset = int(client_sd.json_object["timezone"])
-
     file = os.path.join(path, "mlperf_log_detail.txt")
 
     with open(file) as f:
@@ -282,14 +280,14 @@ def _get_begin_end_time_from_mlperf_log_detail(
                     line,
                     r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
                     file,
-                    timezone_offset,
+                    0,
                 )
             elif re.search("power_end", line.lower()):
                 system_end = get_time_from_line(
                     line,
                     r"(\d*-\d*-\d* \d*:\d*:\d*\.\d*)",
                     file,
-                    timezone_offset,
+                    0,
                 )
             if system_begin and system_end:
                 break
@@ -386,9 +384,9 @@ def messages_check(client_sd: SessionDescriptor, server_sd: SessionDescriptor) -
     mc = client_sd.json_object["messages"]
     ms = server_sd.json_object["messages"]
 
-    assert (
-        len(mc) == len(ms) - 1
-    ), f"Client commands list length ({len(mc)}) should be less than server commands list length ({len(ms)}) by one. "
+    assert len(mc) == len(
+        ms
+    ), f"Client commands list length ({len(mc)}) should be equal to server commands list length ({len(ms)}). "
 
     # Check that server.json contains all client.json messages and replies.
     for i in range(len(mc)):
@@ -434,8 +432,11 @@ def results_check(
 
     # TODO: server.json checksum
     results.pop("power/server.json")
+    # TODO: client.json checksum is no longer recorded
+    results.pop("power/client.json")
     result_paths_copy = RESULT_PATHS.copy()
     result_paths_copy.remove("power/server.json")
+    result_paths_copy.remove("power/client.json")
 
     def remove_optional_path(res: Dict[str, str]) -> None:
         keys = list(res.keys())
