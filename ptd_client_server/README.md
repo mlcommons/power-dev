@@ -76,13 +76,6 @@ A template of this file is provided below and in the [`server.template.conf`](./
 # See "NTP" section in the README.md.
 #ntpServer: ntp.example.com
 
-# A directory to store output data. A relative or absolute path could be used.
-# A new subdirectory will be created per each run.
-# The name of this sub-directory consists of date, time, label, and mode (ranging/testing).
-# The loadgen log is fetched from the client if the `--send-logs` option is enabled for the client.
-# The name of the directory is determined by the workload script running on the SUT, e.g. `ssdmobilenet`.
-# The power log, named `spl.txt`, is extracted from the full PTDaemon log (`ptdLogfile`)
-outDir: D:\ptd-logs\
 
 # (Optional) IP address and port that server listen on
 # Defaults to "0.0.0.0 4950" if not set
@@ -96,10 +89,6 @@ outDir: D:\ptd-logs\
 # A path to PTDaemon executable binary.
 ptd: D:\PTD\ptd-windows-x86.exe
 
-# A path to a logfile that PTDaemon produces (`-l` option).
-# Note that in the current implementation this file is considered temporary
-# and may be overwritten.
-logFile: logs_ptdeamon.txt
 
 # (Optional) A port on that PTDaemon listens (`-p` option). Default is 8888.
 #networkPort: 8888
@@ -143,7 +132,7 @@ devicePort: COM1
 Client command line arguments:
 
 ```
-usage: client.py [-h] -a ADDR -w CMD -L INDIR -o OUTDIR -n ADDR [-p PORT] [-l LABEL] [-s] [-f] [-S]
+usage: client.py [-h] -a ADDR -w CMD -L INDIR -o OUTDIR -n ADDR [-p PORT] [-l LABEL] [-f] [-S]
 
 PTD client
 
@@ -158,8 +147,6 @@ optional arguments:
   -h, --help                      show this help message and exit
   -p PORT, --port PORT            server port, defaults to 4950
   -l LABEL, --label LABEL         a label to include into the resulting directory name
-  -s, --send-logs                 send loadgen logs to the server
-  -F, --fetch-logs                fetch logs from the server
   -f, --force                     force remove loadgen logs directory (INDIR)
   -S, --stop-server               stop the server after processing this client
 ```
@@ -169,8 +156,6 @@ optional arguments:
 
 * `LABEL` is a human-readable label.
   The label is used later both on the client and the server to distinguish between log directories.
-
-* If `-s`/`--send-logs` is enabled, then the loadgen log will be sent to the server and stored alongside the power log.
 
 ## Usage Example
 
@@ -222,7 +207,6 @@ Pass `dummy-loadgen-logs` as a location of loadgen logs.
     --run-workload "./dummy.sh"
     --loadgen-logs "dummy-loadgen-logs" \
     --label "mylabel" \
-    --send-logs \
     --ntp ntp.example.com
 ```
 
@@ -265,7 +249,6 @@ Run it from the same directory (`loadgen/benchmark`).
     --run-workload "./run_workload.sh" \
     --loadgen-logs "build" \
     --label "mylabel" \
-    --send-logs \
     --ntp ntp.example.com
 ```
 
@@ -296,7 +279,6 @@ cd /path/to/mlcommons/inference/vision/classification_and_detection
 	--run-workload "./run_local.sh tf ssd-mobilenet cpu --scenario Offline" \
 	--loadgen-logs "./output/tf-cpu/ssd-mobilenet" \
 	--label "mylabel" \
-	--send-logs \
 	--ntp ntp.example.com
 ```
 
@@ -304,10 +286,10 @@ cd /path/to/mlcommons/inference/vision/classification_and_detection
 
 All the options above store their output in the `client-output-directory` directory, but you can specify any other directory.
 
-After a successful run, you'll see these new files and directories on the server:
+After a successful run, you'll see these new files and directories on the SUT:
 
 ```
-D:\ptd-logs
+./client-output-directory
 ├── … (old entries skipped)
 └── 2020-12-28_15-20-52_mylabel
     ├── power
@@ -330,25 +312,6 @@ D:\ptd-logs
         └── spl.txt                      ← power log
 ```
 
-And these on the SUT:
-
-```
-./client-output-directory
-├── … (old entries skipped)
-└── 2020-12-28_15-20-52_mylabel_ranging
-    ├── client.json
-    ├── client.log
-    ├── ranging
-    │   ├── mlperf_log_accuracy.json   ┐
-    │   ├── mlperf_log_detail.txt      │ ← loadgen log
-    │   ├── mlperf_log_summary.txt     │
-    │   └── mlperf_log_trace.json      ┘
-    └── testing
-        ├── mlperf_log_accuracy.json   ┐
-        ├── mlperf_log_detail.txt      │ ← loadgen log
-        ├── mlperf_log_summary.txt     │
-        └── mlperf_log_trace.json      ┘
-```
 
 `spl.txt` consists of the following lines:
 ```
@@ -402,9 +365,6 @@ D:\ptd-logs
 ```
 Directory with results example is [2021-03-01_15-59-52_loadgen].
 
-To get this structure on the server side you should use `--send-logs` option for client.py.
-To get this structure on the client side you should use `--fetch-logs` option for client.py.
-On other hand, you can get the such files structure manually joined client and server output results.
 If everything is fine you see the next messages after check.py run:
 ```
 [x] Check client sources checksum
