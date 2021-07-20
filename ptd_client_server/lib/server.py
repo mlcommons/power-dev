@@ -177,6 +177,8 @@ def max_volts_amps(
                     if is_sutable_channel:
                         maxVolts = max(maxVolts, volts)
                         maxAmps = max(maxAmps, amps)
+                    if len(channel_range) == 0:
+                        break
                 if len(channel_range):
                     raise ExtraChannelError(
                         f"There are extra ptd channels in configuration"
@@ -348,7 +350,7 @@ class ServerConfig:
                     f"{filename}: 'channel' value should consist of one number"
                     f" for a multichannel device {self.ptd_device_type} (Yokogawa WT500)."
                 )
-            if len(self.ptd_channel) != 2:
+            if self.ptd_device_type != DEVICE_TYPE_WT500 and len(self.ptd_channel) != 2:
                 exit_with_error_msg(
                     f"{filename}: 'channel' value should consist of two numbers"
                     f" for a multichannel device {self.ptd_device_type}."
