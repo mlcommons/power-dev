@@ -632,11 +632,6 @@ def debug_check(server_sd: SessionDescriptor) -> None:
     ), "Server was running in debug mode"
 
 
-def version_check() -> None:
-    """Only for master branch"""
-    assert False, "using of not-yet released version of checker"
-
-
 def check_with_logging(check_name: str, check: Callable[[], None]) -> Tuple[bool, bool]:
     try:
         check()
@@ -676,7 +671,6 @@ def check(path: str) -> int:
         ),
         "Check PTD configuration": lambda: check_ptd_config(server),
         "Check debug is disabled on server-side": lambda: debug_check(server),
-        "Check release version": lambda: version_check(),
     }
 
     result = True
