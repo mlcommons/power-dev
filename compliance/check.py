@@ -62,7 +62,8 @@ RESULT_PATHS = [
     TESTING_MODE + "/spl.txt",
 ]
 
-COMMON_ERROR = ["Can't evaluate uncertainty of this sample!","USB."]
+COMMON_ERROR_RANGING = ["Can't evaluate uncertainty of this sample!"]
+COMMON_ERROR_TESTING = ["USB."]
 
 def _normalize(path: str) -> str:
     allparts: List[str] = []
@@ -517,14 +518,14 @@ def check_ptd_logs(
             if start_ranging_time is None or stop_ranging_time is None:
                 assert False, "Can not find ranging time in ptd_logs.txt."
             if error:
-                if problem_line.group(0).strip() == COMMON_ERROR[1]:
+                if problem_line.group(0).strip() == COMMON_ERROR_TESTING[0]:
                     raise CheckerWarning(
                         f"{line.strip()!r} in ptd_log.txt during ranging stage. Treated as WARNING"
                     )
                 assert (
                     start_ranging_time < log_time < stop_ranging_time
                 ), f"{line.strip()!r} in ptd_log.txt"
-                if not problem_line.group(0).strip().startswith(COMMON_ERROR[0]):
+                if not problem_line.group(0).strip().startswith(COMMON_ERROR_RANGING[0]):
                     raise CheckerWarning(
                         f"{line.strip()!r} in ptd_log.txt during ranging stage. Treated as WARNING"
                     )
