@@ -63,15 +63,6 @@ MULTICHANNEL_DEVICES = [48, 59, 61, 77]
 # https://github.com/mlcommons/power-dev/issues/220#issue-835336923
 DEVICE_TYPE_WT500 = 48
 
-MAX_RANGE_FOR_DEVICE = {
-    8: 20,
-    35: 50,
-    48: 50,
-    49: 20,
-    52: 20,
-    77: 20,
-}
-
 
 class MeasurementEndedTooFastError(Exception):
     pass
@@ -779,12 +770,7 @@ class Session:
             self._server._summary.phase("ranging", 0)
             self._ptd.start()
             self._ptd.cmd("SR,V,Auto")
-            ptd_device_type = self._server._config.ptd_device_type
-            if ptd_device_type in MAX_RANGE_FOR_DEVICE:
-                self._ptd.cmd(f"SR,A,{MAX_RANGE_FOR_DEVICE[ptd_device_type]}")
-            else:
-                logging.warning(f"Unknown max range type for device {ptd_device_type}")
-                self._ptd.cmd("SR,A,Auto")
+            self._ptd.cmd("SR,A,Auto")
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting ranging mode")
