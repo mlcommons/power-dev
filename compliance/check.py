@@ -65,6 +65,7 @@ RESULT_PATHS = [
 COMMON_ERROR_RANGING = ["Can't evaluate uncertainty of this sample!"]
 COMMON_ERROR_TESTING = ["USB."]
 
+
 def _normalize(path: str) -> str:
     allparts: List[str] = []
     while 1:
@@ -525,7 +526,11 @@ def check_ptd_logs(
                 assert (
                     start_ranging_time < log_time < stop_ranging_time
                 ), f"{line.strip()!r} in ptd_log.txt"
-                if not problem_line.group(0).strip().startswith(COMMON_ERROR_RANGING[0]):
+                if (
+                    not problem_line.group(0)
+                    .strip()
+                    .startswith(COMMON_ERROR_RANGING[0])
+                ):
                     raise CheckerWarning(
                         f"{line.strip()!r} in ptd_log.txt during ranging stage. Treated as WARNING"
                     )
