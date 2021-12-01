@@ -164,6 +164,8 @@ In these examples we have the following assumptions:
 * The current repository is cloned to `/path/to/mlcommons/power`.
 * Using `ntp.example.com` as an NTP server.
 
+For workflow validation, a dummy analyzer connection may be simulated by setting parameter `deviceType: 0` in the server configuration file.
+
 Start a server (on a director):
 ```sh
 ./server.py -c server-config.conf
@@ -180,7 +182,7 @@ Choose an option below for the example of workload script.
 <details><summary>Example option 1: a dummy workload</summary>
 
 Create a dummy workload script named `dummy.sh`.
-It does nothing but mimicking the real loadgen by creating empty loadgen log files in the `dummy-loadgen-logs` directory.
+This will mimic the real loadgen by creating mock loadgen log files in the `dummy-loadgen-logs` directory.
 
 ```sh
 #!/usr/bin/env bash
@@ -188,12 +190,13 @@ It does nothing but mimicking the real loadgen by creating empty loadgen log fil
 sleep 5
 mkdir -p dummy-loadgen-logs
 
-# Create empty files with the same names as loadgen do
+# Create mock files with the same names that loadgen does
 
+echo power_begin $(date +"%m-%d-%Y %T.%3N") | tee dummy-loadgen-logs/mlperf_log_detail.txt
 touch dummy-loadgen-logs/mlperf_log_accuracy.json
-touch dummy-loadgen-logs/mlperf_log_detail.txt
 touch dummy-loadgen-logs/mlperf_log_summary.txt
 touch dummy-loadgen-logs/mlperf_log_trace.json
+echo power_end $(date +"%m-%d-%Y %T.%3N") | tee -a dummy-loadgen-logs/mlperf_log_detail.txt
 ```
 Don't forget to `chmod +x dummy.sh`.
 
@@ -204,7 +207,7 @@ Pass `dummy-loadgen-logs` as a location of loadgen logs.
 /path/to/mlcommons/power/ptd_client_server/client.py \
     --addr 192.168.1.2 \
     --output "client-output-directory" \
-    --run-workload "./dummy.sh"
+    --run-workload "./dummy.sh" \
     --loadgen-logs "dummy-loadgen-logs" \
     --label "mylabel" \
     --ntp ntp.example.com
