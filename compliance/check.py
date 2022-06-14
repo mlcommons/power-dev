@@ -303,7 +303,7 @@ def phases_check(
     client_sd: SessionDescriptor, server_sd: SessionDescriptor, path: str
 ) -> None:
     """Check that the time difference between corresponding checkpoint values
-    from client.json and server.json is less than 500 ms.
+    from client.json and server.json is less than or equal to 500 ms.
     Check that the loadgen timestamps are within workload time interval.
     Check that the duration of loadgen test for the ranging mode is comparable
     with duration of loadgen test for the testing mode.
