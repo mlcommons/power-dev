@@ -63,6 +63,17 @@ MULTICHANNEL_DEVICES = [48, 59, 61, 77]
 # https://github.com/mlcommons/power-dev/issues/220#issue-835336923
 DEVICE_TYPE_WT500 = 48
 
+MAX_RANGE_FOR_DEVICE = {
+    8: 20,  # WT210
+    49: 20,  # WT310
+    52: 20,  # WT330
+    77: 20,  # WT330_multichannel
+    35: 40,  # WT500
+    48: 40,  # WT500_multichannel
+    47: 50,  # WT1800
+    66: 30,  # WT5000
+}
+
 
 class MeasurementEndedTooFastError(Exception):
     pass
@@ -268,6 +279,7 @@ class ServerConfig:
             parse=get_host_port_from_listen_string,
             fallback=f"0.0.0.0 {common.DEFAULT_PORT}",
         )
+        self.ranging_mode = get("server", "rangingMode", fallback="AUTO")
 
         self.ptd_channel: Optional[List[int]] = get(
             "ptd", "channel", parse=parse_channel, fallback=None
@@ -770,7 +782,21 @@ class Session:
             self._server._summary.phase("ranging", 0)
             self._ptd.start()
             self._ptd.cmd("SR,V,Auto")
-            self._ptd.cmd("SR,A,Auto")
+            if self._server._config.ranging_mode == "AUTO":
+                self._ptd.cmd("SR,A,Auto")
+            elif self._server._config.ranging_mode == "MAX":
+                ptd_device_type = self._server._config.ptd_device_type
+                if ptd_device_type in MAX_RANGE_FOR_DEVICE:
+                    self._ptd.cmd(f"SR,A,{MAX_RANGE_FOR_DEVICE[ptd_device_type]}")
+                else:
+                    logging.warning(
+                        f"Unknown max range type for device {ptd_device_type}, using AUTO"
+                    )
+                    self._ptd.cmd("SR,A,Auto")
+            else:
+                logging.warning("Unknown range mode, using AUTO")
+                self._ptd.cmd("SR,A,Auto")
+
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting ranging mode")
