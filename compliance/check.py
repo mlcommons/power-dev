@@ -41,6 +41,7 @@ SUPPORTED_MODEL = {
     "YokogawaWT500_multichannel": 48,
     "YokogawaWT310": 49,
     "YokogawaWT310E": 49,
+    "YokogawaWT330": 52,
     "YokogawaWT330E": 52,
     "YokogawaWT330_multichannel": 77,
 }
