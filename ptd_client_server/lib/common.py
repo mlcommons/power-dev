@@ -42,6 +42,7 @@ FETCH_FILES_LIST = [
     "power/server.json",
     "power/server.log",
     "run_1/spl.txt",
+    "run_1/ptd_out.txt",
 ]
 
 

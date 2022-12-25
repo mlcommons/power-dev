@@ -644,8 +644,14 @@ class Server:
 
             if cmd == ["start", "ranging"]:
                 return unbool[self.session.start(Mode.RANGING)]
-            elif cmd == ["start", "testing"]:
+            elif cmd[0] == "start" and cmd[1] ==  "testing" and len(cmd) == 2:
                 return unbool[self.session.start(Mode.TESTING)]
+            elif cmd[0] == "start" and cmd[1]  == "testing" and len(cmd) == 4:
+                self.session._maxVolts = cmd[2]
+                self.session._maxAmps = cmd[3]
+                self.session._manual_limits = True
+                r = self.session.start(Mode.TESTING)
+                return unbool[r] if type(r) == bool else r
 
             if cmd == ["stop", "ranging"]:
                 return unbool[self.session.stop(Mode.RANGING)]
@@ -769,6 +775,7 @@ class Session:
         self._state = SessionState.INITIAL
         self._maxAmps: Optional[str] = None
         self._maxVolts: Optional[str] = None
+        self._manual_limits = False
 
     def start(self, mode: Mode) -> bool:
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
@@ -808,14 +815,28 @@ class Session:
             self._server._summary.phase("ranging", 1)
             return True
 
-        if mode == Mode.TESTING and self._state == SessionState.RANGING_DONE:
+        if mode == Mode.TESTING and ((self._state == SessionState.INITIAL and self._maxVolts and self._maxAmps) or self._state == SessionState.RANGING_DONE):
             self._server._summary.phase("testing", 0)
             self._ptd.start()
-            self._ptd.cmd(f"SR,V,{self._maxVolts}")
-            self._ptd.cmd(f"SR,A,{self._maxAmps}")
+
+            r = self._ptd.cmd(f"SR,V,{self._maxVolts}")
+            if r and 'Error' in r:
+                error=f"Error setting voltage range: {self._maxVolts}"
+                logging.error(error)
+                self.drop()
+                return r
+
+            r = self._ptd.cmd(f"SR,A,{self._maxAmps}")
+            if r and 'Error' in r:
+                error=f"Error setting voltage range: {self._maxVolts}"
+                logging.error(error)
+                self.drop()
+                return r
+
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting testing mode")
+            logging.info(f"maxAmps: {self._maxAmps}, maxVolts: {self._maxVolts}")
             self._ptd.cmd(f"Go,1000,0,{self._id}_testing")
 
             self._state = SessionState.TESTING
@@ -888,12 +909,17 @@ class Session:
 
         if mode == Mode.TESTING and self._state == SessionState.TESTING:
             self._state = SessionState.TESTING_DONE
+            watts=self._ptd.cmd("Watts")
+            uncertainty=self._ptd.cmd("Uncertainty")
             self._ptd.stop()
             dirname = os.path.join(self.log_dir_path, "run_1")
             os.mkdir(dirname)
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
                 f.write(
                     read_log(self._server._config.ptd_logfile, self._id + "_testing")
+                )
+            with open(os.path.join(dirname, "ptd_out.txt"), "w") as f:
+                f.write( "Power: " + watts+ "\nUncertainty: "+ uncertainty
                 )
             self._server._summary.phase("testing", 3)
             return True
