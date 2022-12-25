@@ -17,7 +17,7 @@ from __future__ import annotations
 from decimal import Decimal
 from enum import Enum
 from ipaddress import ip_address
-from typing import Any, Callable, Optional, Dict, Tuple, List, Set, NoReturn
+from typing import Any, Callable, Optional, Dict, Tuple, List, Set, NoReturn, Union
 import argparse
 import atexit
 import builtins
@@ -777,7 +777,7 @@ class Session:
         self._maxVolts: Optional[str] = None
         self._manual_limits = False
 
-    def start(self, mode: Mode) -> bool:
+    def start(self, mode: Mode) -> Union[bool, str]:
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
             return True
         if mode == Mode.TESTING and self._state == SessionState.TESTING:
