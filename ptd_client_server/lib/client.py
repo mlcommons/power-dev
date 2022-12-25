@@ -288,9 +288,9 @@ def main() -> None:
     os.mkdir(power_dir)
 
     if args.max_amps > 0 and args.max_volts > 0:
-        needed_modes = [ "testing" ]
+        needed_modes = ["testing"]
     else:
-        needed_modes = [ "ranging", "testing" ]
+        needed_modes = ["ranging", "testing"]
 
     for mode in needed_modes:
         logging.info(f"Running workload in {mode} mode")
@@ -300,7 +300,10 @@ def main() -> None:
 
         summary.phase(mode, 0)
         if args.max_amps > 0 and args.max_volts > 0:
-            command(f"session,{session},start,{mode},{args.max_volts},{args.max_amps}", check=True)
+            command(
+                f"session,{session},start,{mode},{args.max_volts},{args.max_amps}",
+                check=True
+            )
         else:
             command(f"session,{session},start,{mode}", check=True)
 
@@ -346,7 +349,7 @@ def main() -> None:
     command(f"session,{session},done", check=True)
 
     for fname in common.FETCH_FILES_LIST:
-        if 'ranging' in fname and args.max_amps > 0 and args.max_volts > 0:
+        if "ranging" in fname and args.max_amps > 0 and args.max_volts > 0:
             continue
         command.download(f"download,{session},{fname}", os.path.join(out_dir, fname))
 

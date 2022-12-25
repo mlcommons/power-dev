@@ -644,9 +644,9 @@ class Server:
 
             if cmd == ["start", "ranging"]:
                 return unbool[self.session.start(Mode.RANGING)]
-            elif cmd[0] == "start" and cmd[1] ==  "testing" and len(cmd) == 2:
+            elif cmd[0] == "start" and cmd[1] == "testing" and len(cmd) == 2:
                 return unbool[self.session.start(Mode.TESTING)]
-            elif cmd[0] == "start" and cmd[1]  == "testing" and len(cmd) == 4:
+            elif cmd[0] == "start" and cmd[1] == "testing" and len(cmd) == 4:
                 self.session._maxVolts = cmd[2]
                 self.session._maxAmps = cmd[3]
                 self.session._manual_limits = True
@@ -815,23 +815,26 @@ class Session:
             self._server._summary.phase("ranging", 1)
             return True
 
-        if mode == Mode.TESTING and ((self._state == SessionState.INITIAL and self._maxVolts and self._maxAmps) or self._state == SessionState.RANGING_DONE):
+        if mode == Mode.TESTING and (
+            (self._state == SessionState.INITIAL and self._maxVolts and self._maxAmps)
+            or self._state == SessionState.RANGING_DONE
+        ):
             self._server._summary.phase("testing", 0)
             self._ptd.start()
 
             r = self._ptd.cmd(f"SR,V,{self._maxVolts}")
-            if r and 'Error' in r:
+            if r and "Error" in r:
                 error=f"Error setting voltage range: {self._maxVolts}"
                 logging.error(error)
                 self.drop()
-                return r
+                return error
 
             r = self._ptd.cmd(f"SR,A,{self._maxAmps}")
-            if r and 'Error' in r:
-                error=f"Error setting voltage range: {self._maxVolts}"
+            if r and "Error" in r:
+                error=f"Error setting current range: {self._maxAmps}"
                 logging.error(error)
                 self.drop()
-                return r
+                return error
 
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
@@ -909,8 +912,8 @@ class Session:
 
         if mode == Mode.TESTING and self._state == SessionState.TESTING:
             self._state = SessionState.TESTING_DONE
-            watts=self._ptd.cmd("Watts")
-            uncertainty=self._ptd.cmd("Uncertainty")
+            watts = self._ptd.cmd("Watts")
+            uncertainty = self._ptd.cmd("Uncertainty")
             self._ptd.stop()
             dirname = os.path.join(self.log_dir_path, "run_1")
             os.mkdir(dirname)
@@ -919,8 +922,7 @@ class Session:
                     read_log(self._server._config.ptd_logfile, self._id + "_testing")
                 )
             with open(os.path.join(dirname, "ptd_out.txt"), "w") as f:
-                f.write( "Power: " + watts+ "\nUncertainty: "+ uncertainty
-                )
+                f.write(f"Power: {watts} \nUncertainty: {uncertainty}")
             self._server._summary.phase("testing", 3)
             return True
 
