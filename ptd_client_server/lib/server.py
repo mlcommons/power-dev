@@ -643,9 +643,9 @@ class Server:
             unbool = ["Error", "OK"]
 
             if cmd == ["start", "ranging"]:
-                return unbool[self.session.start(Mode.RANGING)]
+                return unbool[int(self.session.start(Mode.RANGING))]
             elif cmd[0] == "start" and cmd[1] == "testing" and len(cmd) == 2:
-                return unbool[self.session.start(Mode.TESTING)]
+                return unbool[int(self.session.start(Mode.TESTING))]
             elif cmd[0] == "start" and cmd[1] == "testing" and len(cmd) == 4:
                 self.session._maxVolts = cmd[2]
                 self.session._maxAmps = cmd[3]
@@ -654,9 +654,9 @@ class Server:
                 return unbool[r] if type(r) == bool else r
 
             if cmd == ["stop", "ranging"]:
-                return unbool[self.session.stop(Mode.RANGING)]
+                return unbool[int(self.session.stop(Mode.RANGING))]
             if cmd == ["stop", "testing"]:
-                return unbool[self.session.stop(Mode.TESTING)]
+                return unbool[int(self.session.stop(Mode.TESTING))]
 
             if cmd == ["done"]:
                 self._drop_session()
