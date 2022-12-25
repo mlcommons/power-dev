@@ -302,7 +302,7 @@ def main() -> None:
         if args.max_amps > 0 and args.max_volts > 0:
             command(
                 f"session,{session},start,{mode},{args.max_volts},{args.max_amps}",
-                check=True
+                check=True,
             )
         else:
             command(f"session,{session},start,{mode}", check=True)

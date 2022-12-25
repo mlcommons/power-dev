@@ -824,14 +824,14 @@ class Session:
 
             r = self._ptd.cmd(f"SR,V,{self._maxVolts}")
             if r and "Error" in r:
-                error=f"Error setting voltage range: {self._maxVolts}"
+                error = f"Error setting voltage range: {self._maxVolts}"
                 logging.error(error)
                 self.drop()
                 return error
 
             r = self._ptd.cmd(f"SR,A,{self._maxAmps}")
             if r and "Error" in r:
-                error=f"Error setting current range: {self._maxAmps}"
+                error = f"Error setting current range: {self._maxAmps}"
                 logging.error(error)
                 self.drop()
                 return error
