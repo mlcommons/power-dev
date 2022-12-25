@@ -651,7 +651,7 @@ class Server:
                 self.session._maxAmps = cmd[3]
                 self.session._manual_limits = True
                 r = self.session.start(Mode.TESTING)
-                return unbool[r] if type(r) == bool else r
+                return unbool[int(r)] if type(r) == bool else str(r)
 
             if cmd == ["stop", "ranging"]:
                 return unbool[int(self.session.stop(Mode.RANGING))]
