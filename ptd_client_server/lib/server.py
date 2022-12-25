@@ -545,6 +545,7 @@ class Server:
         self._summary: Optional[summarylib.Summary] = None
         self._last_session: Optional[str] = None
         self._last_session_dir_path: Optional[str] = None
+        self._ptd = None
 
     def handle_connection(self, p: common.Proto) -> None:
         p.enable_keepalive()
