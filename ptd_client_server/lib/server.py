@@ -930,6 +930,11 @@ def main() -> None:
 
     server = Server(config)
     try:
+        server._ptd = Ptd(
+            server._config.ptd_command, server._config.ptd_port, os.path.join(server._config.out_dir)
+        )
+        server._ptd.start()
+        server._ptd.terminate()
         common.run_server(
             config.host,
             config.port,
