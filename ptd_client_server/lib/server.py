@@ -795,10 +795,12 @@ class Session:
             server._config.ptd_command, server._config.ptd_port, self.power_logs
         )
 
-        # State
+        # State. Last item will be done in a crude manner, but good enough
         self._state = SessionState.INITIAL
         self._maxAmps: Optional[str] = None
         self._maxVolts: Optional[str] = None
+        self._desirableCurrentRange: Optional[str] = None
+        self._maxWatts: Optional[str] = None
 
     def start(self, mode: Mode) -> bool:
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
@@ -842,7 +844,7 @@ class Session:
             self._server._summary.phase("testing", 0)
             self._ptd.start()
             self._ptd.cmd(f"SR,V,{self._maxVolts}")
-            self._ptd.cmd(f"SR,A,{self._maxAmps}")
+            self._ptd.cmd(f"SR,A,{self._desirableCurrentRange}")
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting testing mode")
@@ -905,6 +907,13 @@ class Session:
                     start_channel,
                     channels_amount,
                 )
+                # we will generate crude max power approximation
+                self._maxWatts = float(float(self._maxAmps)*float(self._maxVolts))
+                if self._maxWatts > 75:
+                    self._desirableCurrentRange = str(float(self._maxAmps)*1.1)
+                else:
+                    self._desirableCurrentRange = str(float(self._maxAmps)*1.5)
+
 
             except MaxVoltsAmpsNegativeValuesError as e:
                 if test_duration < 1:
