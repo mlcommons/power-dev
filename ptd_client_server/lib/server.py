@@ -462,7 +462,12 @@ class Ptd:
         grabbed_power_data = self.read(number_of_samples)
         grabbed_uncertainty_data = self.cmd("Uncertainty")
         grabbed_sanity_chk_data = self.cmd("Watts")
-        return number_of_samples, grabbed_power_data, grabbed_uncertainty_data, grabbed_sanity_chk_data
+        return (
+            number_of_samples,
+            grabbed_power_data,
+            grabbed_uncertainty_data,
+            grabbed_sanity_chk_data
+        )
 
     def stop(self) -> None:
         self.cmd("Stop")
@@ -878,8 +883,10 @@ class Session:
             self._state = SessionState.RANGING_DONE
             self._ptd.stop()
             samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data() 
-            #(DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
-            formatted_log_data = log_data.replace("\n", str(",Mark,"+self._id+"_ranging\n")) # honoring format of legacy spl.txt
+            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
+            formatted_log_data = log_data.replace(
+                "\n", str(",Mark," + self._id+"_ranging\n")
+            )  # honoring format of legacy spl.txt
             assert self._go_command_time is not None
             test_duration = time.monotonic() - self._go_command_time
             dirname = os.path.join(self.log_dir_path, "ranging")
@@ -923,8 +930,10 @@ class Session:
             dirname = os.path.join(self.log_dir_path, "run_1")
             os.mkdir(dirname)
             samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data() 
-            #(DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
-            formatted_log_data = log_data.replace("\n", str(",Mark,"+self._id+"_testing\n")) # honoring format of legacy spl.txt
+            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
+            formatted_log_data = log_data.replace(
+                "\n", str(",Mark," + self._id + "_testing\n")
+            )  # honoring format of legacy spl.txt
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
                 f.write(formatted_log_data)
             self._server._summary.phase("testing", 3)
