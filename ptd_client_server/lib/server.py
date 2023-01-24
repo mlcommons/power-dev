@@ -455,9 +455,9 @@ class Ptd:
         # (DM) Created method that will utilize SPEC's (only) preferred way of PTD usage and data gathering
         power_data_header = self.cmd("RL")  # RL - command to show unread samples
         if power_data_header is not None:
-            number_of_samples = int(power_data_header.split(" ")[
-                1
-            ])  # first line of response will have message: "Last XYZ samples"
+            number_of_samples = int(
+                power_data_header.split(" ")[1]
+            )  # first line of response will have message: "Last XYZ samples"
         else:
             number_of_samples = 0
         grabbed_power_data = self.read(number_of_samples)
