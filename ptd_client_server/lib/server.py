@@ -451,16 +451,18 @@ class Ptd:
 
         self._get_initial_range()
 
-    def grab_power_data(self) -> Tuple[int, List[str], Optional[str], Optional[str]]:
+    def grab_power_data(self) -> Tuple[int, str, Optional[str], Optional[str]]:
         # (DM) Created method that will utilize SPEC's (only) preferred way of PTD usage and data gathering
         power_data_header = self.cmd("RL")  # RL - command to show unread samples
         if power_data_header is not None:
-            number_of_samples = power_data_header.split(" ")[
+            number_of_samples = int(power_data_header.split(" ")[
                 1
-            ]  # first line of response will have message: "Last XYZ samples"
+            ])  # first line of response will have message: "Last XYZ samples"
         else:
             number_of_samples = 0
         grabbed_power_data = self.read(number_of_samples)
+        if grabbed_power_data is None:
+            exit_with_error_msg("Failed to get power data")
         grabbed_uncertainty_data = self.cmd("Uncertainty")
         grabbed_sanity_chk_data = self.cmd("Watts")
         return (
