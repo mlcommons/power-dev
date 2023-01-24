@@ -451,15 +451,14 @@ class Ptd:
 
         self._get_initial_range()
 
-    def grab_power_data(self) -> List[str]:
+    def grab_power_data(self) -> Tuple[int, List[str], Optional[str], Optional[str]]:
         # (DM) Created method that will utilize SPEC's (only) preferred way of PTD usage and data gathering
         power_data_header = self.cmd("RL")  # RL - command to show unread samples
-        number_of_samples = power_data_header.split(" ")[
-            1
-        ]  # first line of response will have message: "Last XYZ samples"
-        try:
-            number_of_samples = int(power_data_header.split(" ")[1])
-        except:
+        if power_data_header is not None:
+            number_of_samples = power_data_header.split(" ")[
+                1
+            ]  # first line of response will have message: "Last XYZ samples"
+        else:
             number_of_samples = 0
         grabbed_power_data = self.read(number_of_samples)
         grabbed_uncertainty_data = self.cmd("Uncertainty")
@@ -527,7 +526,7 @@ class Ptd:
         self._messages.add(cmd, reply)
         return reply
 
-    def read(self, number: int) -> List[str]:
+    def read(self, number: int) -> Optional[str]:
         # (DM) had to add method that will unprovokedly read "number" of lines, so we can get all power data
         reply = ""
         if self._proto is None:
@@ -536,8 +535,12 @@ class Ptd:
             exit_with_error_msg("PTDaemon unexpectedly terminated")
         logging.info(f"Trying to read {number!r} lines")
         while number:
-            reply += self._proto.recv()
-            reply += "\n"
+            rcvd = self._proto.recv()
+            if rcvd is not None:
+                reply += rcvd
+                reply += "\n"
+            else:
+                exit_with_error_msg("Some samples can't be read")
             number -= 1
         if reply is None:
             exit_with_error_msg("Got no reply from PTDaemon")
