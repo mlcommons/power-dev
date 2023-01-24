@@ -452,11 +452,13 @@ class Ptd:
         self._get_initial_range()
 
     def grab_power_data(self) -> List[str]:
-        #(DM) Created method that will utilize SPEC's (only) preferred way of PTD usage and data gathering
+        # (DM) Created method that will utilize SPEC's (only) preferred way of PTD usage and data gathering
         power_data_header = self.cmd("RL")  # RL - command to show unread samples
-        number_of_samples = power_data_header.split(' ')[1] # first line of response will have message: "Last XYZ samples"
+        number_of_samples = power_data_header.split(" ")[
+            1
+        ]  # first line of response will have message: "Last XYZ samples"
         try:
-            number_of_samples = int(power_data_header.split(' ')[1])
+            number_of_samples = int(power_data_header.split(" ")[1])
         except:
             number_of_samples = 0
         grabbed_power_data = self.read(number_of_samples)
@@ -466,7 +468,7 @@ class Ptd:
             number_of_samples,
             grabbed_power_data,
             grabbed_uncertainty_data,
-            grabbed_sanity_chk_data
+            grabbed_sanity_chk_data,
         )
 
     def stop(self) -> None:
@@ -526,7 +528,7 @@ class Ptd:
         return reply
 
     def read(self, number: int) -> List[str]:
-        #(DM) had to add method that will unprovokedly read "number" of lines, so we can get all power data
+        # (DM) had to add method that will unprovokedly read "number" of lines, so we can get all power data
         reply = ""
         if self._proto is None:
             return None
@@ -882,10 +884,10 @@ class Session:
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
             self._state = SessionState.RANGING_DONE
             self._ptd.stop()
-            samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data() 
+            samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
             # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
             formatted_log_data = log_data.replace(
-                "\n", str(",Mark," + self._id+"_ranging\n")
+                "\n", str(",Mark," + self._id + "_ranging\n")
             )  # honoring format of legacy spl.txt
             assert self._go_command_time is not None
             test_duration = time.monotonic() - self._go_command_time
@@ -929,7 +931,7 @@ class Session:
             self._ptd.stop()
             dirname = os.path.join(self.log_dir_path, "run_1")
             os.mkdir(dirname)
-            samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data() 
+            samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
             # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
             formatted_log_data = log_data.replace(
                 "\n", str(",Mark," + self._id + "_testing\n")
