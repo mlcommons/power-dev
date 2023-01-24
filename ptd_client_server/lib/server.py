@@ -769,6 +769,7 @@ class Session:
         self._state = SessionState.INITIAL
         self._maxAmps: Optional[str] = None
         self._maxVolts: Optional[str] = None
+        self._desirableCurrentRange: Optional[str] = None
 
     def start(self, mode: Mode) -> bool:
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
@@ -812,7 +813,7 @@ class Session:
             self._server._summary.phase("testing", 0)
             self._ptd.start()
             self._ptd.cmd(f"SR,V,{self._maxVolts}")
-            self._ptd.cmd(f"SR,A,{self._maxAmps}")
+            self._ptd.cmd(f"SR,A,{self._desirableCurrentRange}")
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting testing mode")
@@ -874,6 +875,22 @@ class Session:
                     start_channel,
                     channels_amount,
                 )
+
+                # we will generate crude max power approximation and depending on that, we will add fix to crest factor
+                # default is crest factor 3 (pek current is 3x rms current)
+                # PSUs under 75W don't have mandatory Power Factor Correction, so they can be arbitrarily dirty
+                # meters use crest factor of 6 for such devices. so, most meaningful solution is to increase range x2
+                # that will increase detectable peak current to 6x original max noticed value
+                # in case such things are not done, peaks over 3x range will be cut off, so measured/reported power will be reported as lower than realistic
+
+                if self._maxAmps is not None and self._maxVolts is not None:
+                    w = float(self._maxAmps) * float(self._maxVolts)
+                else:
+                    w = -1
+                if w > 75:
+                    self._desirableCurrentRange = self._maxAmps
+                else:
+                    self._desirableCurrentRange = str(float(self._maxAmps) * 2)
 
             except MaxVoltsAmpsNegativeValuesError as e:
                 if test_duration < 1:
