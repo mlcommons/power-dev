@@ -452,24 +452,17 @@ class Ptd:
         self._get_initial_range()
 
     def grab_power_data(self) -> List[str]:
-        # (DM) Created method that will utilize SPEC's (only) preferred way of PTD usage and data gathering
+        #(DM) Created method that will utilize SPEC's (only) preferred way of PTD usage and data gathering
         power_data_header = self.cmd("RL")  # RL - command to show unread samples
-        number_of_samples = power_data_header.split(" ")[
-            1
-        ] # first line of response will have message: "Last XYZ samples"
+        number_of_samples = power_data_header.split(' ')[1] # first line of response will have message: "Last XYZ samples"
         try:
-            number_of_samples = int(power_data_header.split(" ")[1])
+            number_of_samples = int(power_data_header.split(' ')[1])
         except:
             number_of_samples = 0
         grabbed_power_data = self.read(number_of_samples)
         grabbed_uncertainty_data = self.cmd("Uncertainty")
         grabbed_sanity_chk_data = self.cmd("Watts")
-        return (
-            number_of_samples, 
-            grabbed_power_data, 
-            grabbed_uncertainty_data, 
-            grabbed_sanity_chk_data
-        )
+        return number_of_samples, grabbed_power_data, grabbed_uncertainty_data, grabbed_sanity_chk_data
 
     def stop(self) -> None:
         self.cmd("Stop")
@@ -528,7 +521,7 @@ class Ptd:
         return reply
 
     def read(self, number: int) -> List[str]:
-        # (DM) had to add method that will unprovokedly read "number" of lines, so we can get all power data
+        #(DM) had to add method that will unprovokedly read "number" of lines, so we can get all power data
         reply = ""
         if self._proto is None:
             return None
@@ -802,12 +795,10 @@ class Session:
             server._config.ptd_command, server._config.ptd_port, self.power_logs
         )
 
-        # State. Last item will be done in a crude manner, but good enough
+        # State
         self._state = SessionState.INITIAL
         self._maxAmps: Optional[str] = None
         self._maxVolts: Optional[str] = None
-        self._desirableCurrentRange: Optional[str] = None
-        self._maxWatts: Optional[str] = None
 
     def start(self, mode: Mode) -> bool:
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
@@ -851,7 +842,7 @@ class Session:
             self._server._summary.phase("testing", 0)
             self._ptd.start()
             self._ptd.cmd(f"SR,V,{self._maxVolts}")
-            self._ptd.cmd(f"SR,A,{self._desirableCurrentRange}")
+            self._ptd.cmd(f"SR,A,{self._maxAmps}")
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting testing mode")
@@ -887,10 +878,8 @@ class Session:
             self._state = SessionState.RANGING_DONE
             self._ptd.stop()
             samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data() 
-            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
-            formatted_log_data = log_data.replace(
-                "\n", str(",Mark,"+self._id+"_ranging\n")
-            )  # honoring format of legacy spl.txt
+            #(DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
+            formatted_log_data = log_data.replace("\n", str(",Mark,"+self._id+"_ranging\n")) # honoring format of legacy spl.txt
             assert self._go_command_time is not None
             test_duration = time.monotonic() - self._go_command_time
             dirname = os.path.join(self.log_dir_path, "ranging")
@@ -916,13 +905,6 @@ class Session:
                     start_channel,
                     channels_amount,
                 )
-                # we will generate crude max power approximation
-                self._maxWatts = float(float(self._maxAmps) * float(self._maxVolts))
-                if self._maxWatts > 75:
-                    self._desirableCurrentRange = str(float(self._maxAmps) * 1.1)
-                else:
-                    self._desirableCurrentRange = str(float(self._maxAmps) * 1.5)
-
 
             except MaxVoltsAmpsNegativeValuesError as e:
                 if test_duration < 1:
@@ -941,10 +923,8 @@ class Session:
             dirname = os.path.join(self.log_dir_path, "run_1")
             os.mkdir(dirname)
             samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data() 
-            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
-            formatted_log_data = log_data.replace(
-                "\n", str(",Mark,"+self._id+"_testing\n")
-            )  # honoring format of legacy spl.txt
+            #(DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
+            formatted_log_data = log_data.replace("\n", str(",Mark,"+self._id+"_testing\n")) # honoring format of legacy spl.txt
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
                 f.write(formatted_log_data)
             self._server._summary.phase("testing", 3)
