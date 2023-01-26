@@ -878,8 +878,8 @@ class Session:
                             channels_amount = self._server._config.ptd_channel[1]
 
                 (
-                    self._maxVolts, 
-                    self._maxAmps, 
+                    self._maxVolts,
+                    self._maxAmps,
                     self._avgWatts,
                 ) = max_volts_amps_avg_watts(
                     self._server._config.ptd_logfile,
