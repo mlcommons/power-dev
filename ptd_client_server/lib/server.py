@@ -197,7 +197,7 @@ def max_volts_amps_avg_watts(
     else:
         avgWatts = -1
     return str(maxVolts), str(maxAmps), str("%.6f" % avgWatts)
-    
+
 
 def read_log(log_fname: str, mark: str) -> str:
     # TODO: The log file grows over time and never cleared.
