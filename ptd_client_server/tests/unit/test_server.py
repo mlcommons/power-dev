@@ -65,12 +65,16 @@ def test_max_volts_amps_avg_watts(tmp_path: Path) -> None:
             b"Time,11-13-2020 22:39:00.239,Watts,275.630000,Volts,-1.000000,Amps,-1.000000,PF,-1.000000,Mark,notset1,Ch1,Watts1,91.960000,Volts,120.910000,Amps,0.810300,PF,0.938600,Ch2,Watts,91.870000,Volts,120.830000,Amps,0.810400,PF,0.938500,Ch3,Watts,91.800000,Volts,120.730000,Amps,0.810200,PF,0.938400\n"
         )
 
-    assert server.max_volts_amps_avg_watts(str(tmp_path / "logs_tmp"), "notset", 3, 1) == (
+    assert server.max_volts_amps_avg_watts(
+        str(tmp_path / "logs_tmp"), "notset", 3, 1
+    ) == (
         "120.750000",
         "0.810300",
         "91.575000",
     )
-    assert server.max_volts_amps_avg_watts(str(tmp_path / "logs_tmp"), "notset", 2, 2) == (
+    assert server.max_volts_amps_avg_watts(
+        str(tmp_path / "logs_tmp"), "notset", 2, 2
+    ) == (
         "120.850000",
         "0.810400",
         "91.610000",
@@ -79,18 +83,28 @@ def test_max_volts_amps_avg_watts(tmp_path: Path) -> None:
         server.max_volts_amps_avg_watts(str(tmp_path / "logs_tmp"), "notset", 2, 4)
     assert "There are extra ptd channels in configuration" in str(excinfo.value)
 
-    assert server.max_volts_amps_avg_watts(str(tmp_path / "logs_tmp"), "notset", 1, 3) == (
+    assert server.max_volts_amps_avg_watts(
+        str(tmp_path / "logs_tmp"), "notset", 1, 3
+    ) == (
         "120.950000",
         "0.832100",
         "91.651667",
     )
     assert server.max_volts_amps_avg_watts(
         str(tmp_path / "logs_tmp"), "2021-01-22_15-05-02_loadgen_ranging", 0, 0
-    ) == ("227.370000", "0.225410", "24.980000")
+    ) == (
+        "227.370000",
+        "0.225410",
+        "24.980000",
+    )
 
     assert server.max_volts_amps_avg_watts(
         str(tmp_path / "logs_tmp"), "2021-01-22_15-05-02_loadgen_ranging", 1, 0
-    ) == ("227.370000", "0.225410", "24.980000")
+    ) == (
+        "227.370000",
+        "0.225410",
+        "24.980000",
+    )
 
     with pytest.raises(server.LitNotFoundError) as excinfo:
         server.max_volts_amps_avg_watts(str(tmp_path / "logs_tmp"), "notset1", 1, 3)

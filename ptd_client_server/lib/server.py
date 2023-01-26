@@ -191,7 +191,7 @@ def max_volts_amps_avg_watts(
                     )
     if maxVolts <= 0 or maxAmps <= 0:
         raise MaxVoltsAmpsNegativeValuesError(f"Could not find values for {mark!r}")
-    avgWatts = sum(watts)/len(watts)
+    avgWatts = sum(watts) / len(watts)
     return str(maxVolts), str(maxAmps), str(avgWatts)
 
 
@@ -877,7 +877,11 @@ class Session:
                         if len(self._server._config.ptd_channel) == 2:
                             channels_amount = self._server._config.ptd_channel[1]
 
-                self._maxVolts, self._maxAmps, self._avgWatts = max_volts_amps_avg_watts(
+                (
+                    self._maxVolts, 
+                    self._maxAmps, 
+                    self._avgWatts,
+                ) = max_volts_amps_avg_watts(
                     self._server._config.ptd_logfile,
                     self._id + "_ranging",
                     start_channel,
