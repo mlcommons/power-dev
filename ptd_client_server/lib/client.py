@@ -201,10 +201,10 @@ def main() -> None:
         help="stop the server after processing this client")
     parser.add_argument(
         "-A", "--max-amps", type=float, default=0,
-        help="Use the given current value (in Amperes) as the max limit")
+        help="Use the given current value (in Amperes) as the max limit (Experimental)")
     parser.add_argument(
         "-V", "--max-volts", type=float, default=0,
-        help="Use the given current voltage (in Volts) as the max limit")
+        help="Use the given current voltage (in Volts) as the max limit (Experimental)")
     # fmt: on
     common.log_redirect.start()
 
@@ -288,6 +288,7 @@ def main() -> None:
     os.mkdir(power_dir)
 
     if args.max_amps > 0 and args.max_volts > 0:
+        logging.warning(f"Providing manual ranges are only for experimental purpose and the produced results won't be valid for submission")
         needed_modes = ["testing"]
     else:
         needed_modes = ["ranging", "testing"]
