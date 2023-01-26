@@ -195,7 +195,7 @@ def max_volts_amps_avg_watts(
     if len(watts) >= 1:
         avgWatts = Decimal(sum(watts) / len(watts))
     else:
-        avgWatts = -1
+        avgWatts = Decimal(-1)
     return str(maxVolts), str(maxAmps), str("%.6f" % avgWatts)
 
 
