@@ -147,9 +147,10 @@ def max_volts_amps_avg_watts(
                 parser.lit("Time")
                 parser.skip()
                 parser.lit("Watts")
-                watts_raw = parser.decimal()
-                if watts_raw > 0:
-                    watts.append(watts_raw)
+                if amount_of_channels == 0:
+                    watts_raw = parser.decimal()
+                    if watts_raw > 0:
+                        watts.append(watts_raw)
                 parser.lit("Volts")
                 volts = parser.decimal()
                 parser.lit("Amps")
