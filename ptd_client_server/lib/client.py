@@ -288,7 +288,9 @@ def main() -> None:
     os.mkdir(power_dir)
 
     if args.max_amps > 0 and args.max_volts > 0:
-        logging.warning(f"Providing manual ranges are only for experimental purpose and the produced results won't be valid for submission")
+        logging.warning(
+            f"Providing manual ranges are only for experimental purpose and the produced results won't be valid for submission"
+        )
         needed_modes = ["testing"]
     else:
         needed_modes = ["ranging", "testing"]
