@@ -132,11 +132,13 @@ class Parser:
         return self._cur_number >= len(self.words) - 1
 
 
-def max_volts_amps(
+def max_volts_amps_avg_watts(
     log_fname: str, mark: str, start_channel: int, amount_of_channels: int
-) -> Tuple[str, str]:
+) -> Tuple[str, str, str]:
     maxVolts = Decimal("-1")
     maxAmps = Decimal("-1")
+    avgWatts = Decimal("-1")
+    watts = []
     with open(log_fname, "r") as f:
         for line in f:
             m = RE_PTD_LOG.match(line.rstrip("\r\n"))
@@ -145,7 +147,9 @@ def max_volts_amps(
                 parser.lit("Time")
                 parser.skip()
                 parser.lit("Watts")
-                parser.skip()
+                watts_raw = parser.decimal()
+                if watts_raw > 0:
+                    watts.append(watts_raw)
                 parser.lit("Volts")
                 volts = parser.decimal()
                 parser.lit("Amps")
@@ -167,7 +171,7 @@ def max_volts_amps(
                         channel_range.pop(0)
                     parser.skip()
                     parser.lit("Watts")
-                    parser.skip()
+                    watts_raw = parser.decimal()
                     parser.lit("Volts")
                     volts = parser.decimal()
                     parser.lit("Amps")
@@ -177,6 +181,8 @@ def max_volts_amps(
                     if is_sutable_channel:
                         maxVolts = max(maxVolts, volts)
                         maxAmps = max(maxAmps, amps)
+                        if watts_raw > 0:
+                            watts.append(watts_raw)
                     if len(channel_range) == 0:
                         break
                 if len(channel_range):
@@ -185,7 +191,8 @@ def max_volts_amps(
                     )
     if maxVolts <= 0 or maxAmps <= 0:
         raise MaxVoltsAmpsNegativeValuesError(f"Could not find values for {mark!r}")
-    return str(maxVolts), str(maxAmps)
+    avgWatts = sum(watts)/len(watts)
+    return str(maxVolts), str(maxAmps), str(avgWatts)
 
 
 def read_log(log_fname: str, mark: str) -> str:
@@ -769,6 +776,7 @@ class Session:
         self._state = SessionState.INITIAL
         self._maxAmps: Optional[str] = None
         self._maxVolts: Optional[str] = None
+        self._avgWatts: Optional[str] = None
         self._desirableCurrentRange: Optional[str] = None
 
     def start(self, mode: Mode) -> bool:
@@ -869,28 +877,28 @@ class Session:
                         if len(self._server._config.ptd_channel) == 2:
                             channels_amount = self._server._config.ptd_channel[1]
 
-                self._maxVolts, self._maxAmps = max_volts_amps(
+                self._maxVolts, self._maxAmps, self._avgWatts = max_volts_amps_avg_watts(
                     self._server._config.ptd_logfile,
                     self._id + "_ranging",
                     start_channel,
                     channels_amount,
                 )
 
-                # we will generate crude max power approximation and depending on that, we will add fix to crest factor
+                # we will query average power consumed and depending on that, we will add fix to crest factor
                 # default is crest factor 3 (pek current is 3x rms current)
                 # PSUs under 75W don't have mandatory Power Factor Correction, so they can be arbitrarily dirty
-                # meters use crest factor of 6 for such devices. so, most meaningful solution is to increase range x2
-                # that will increase detectable peak current to 6x original max noticed value
-                # in case such things are not done, peaks over 3x range will be cut off, so measured/reported power will be reported as lower than realistic
+                # Tektronix' app note on power supplies claims that power supplies typically exhibit crest factor between 4 and 10
+                # https://assets.testequity.com/te1/Documents/pdf/power-measurements_AC-DC-an.pdf
+                # in order to achieve same peak detection, range should be 3.3 higher than max measured RMS (since crest factor of meter is 3 and 3*3.3 is almost 10 :) )
 
                 if self._maxAmps is not None and self._maxVolts is not None:
                     w = float(self._maxAmps) * float(self._maxVolts)
                 else:
                     w = -1
-                if w > 75:
-                    self._desirableCurrentRange = self._maxAmps
+                if float(self._avgWatts) < 75:
+                    self._desirableCurrentRange = str(float(self._maxAmps) * 3.3)
                 else:
-                    self._desirableCurrentRange = str(float(self._maxAmps) * 2)
+                    self._desirableCurrentRange = str(float(self._maxAmps) * 1.1)
 
             except MaxVoltsAmpsNegativeValuesError as e:
                 if test_duration < 1:
