@@ -191,7 +191,7 @@ def max_volts_amps_avg_watts(
                     )
     if maxVolts <= 0 or maxAmps <= 0:
         raise MaxVoltsAmpsNegativeValuesError(f"Could not find values for {mark!r}")
-    avgWatts = sum(watts) / len(watts)
+    avgWatts = Decimal(sum(watts)) / len(watts)
     return str(maxVolts), str(maxAmps), str(avgWatts)
 
 
