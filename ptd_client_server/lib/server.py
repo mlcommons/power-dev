@@ -192,11 +192,11 @@ def max_volts_amps_avg_watts(
                     raise ExtraChannelError(
                         f"There are extra ptd channels in configuration"
                     )
-    if maxVolts <= 0 or maxAmps <= 0:
-        raise MaxVoltsAmpsNegativeValuesError(f"Could not find values for {mark!r}")
-    avgWatts = Decimal(sum(watts)) / len(watts)
-    return str(maxVolts), str(maxAmps), str(avgWatts)
-
+    if len(watts) >= 1:
+        avgWatts = Decimal(sum(watts) / len(watts))
+    else:
+        avgWatts = -1
+    return str(maxVolts), str(maxAmps), str("%.6f"%avgWatts)
 
 def read_log(log_fname: str, mark: str) -> str:
     # TODO: The log file grows over time and never cleared.

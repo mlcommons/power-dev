@@ -88,7 +88,7 @@ def test_max_volts_amps_avg_watts(tmp_path: Path) -> None:
     ) == (
         "120.950000",
         "0.832100",
-        "91.57666666666666666666666667",
+        "91.576667",
     )
     assert server.max_volts_amps_avg_watts(
         str(tmp_path / "logs_tmp"), "2021-01-22_15-05-02_loadgen_ranging", 0, 0
