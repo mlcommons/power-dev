@@ -151,6 +151,8 @@ def max_volts_amps_avg_watts(
                     watts_raw = parser.decimal()
                     if watts_raw > 0:
                         watts.append(watts_raw)
+                else:
+                    parser.skip()
                 parser.lit("Volts")
                 volts = parser.decimal()
                 parser.lit("Amps")
