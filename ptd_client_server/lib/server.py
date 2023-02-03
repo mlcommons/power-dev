@@ -132,11 +132,13 @@ class Parser:
         return self._cur_number >= len(self.words) - 1
 
 
-def max_volts_amps(
+def max_volts_amps_avg_watts(
     log_fname: str, mark: str, start_channel: int, amount_of_channels: int
-) -> Tuple[str, str]:
+) -> Tuple[str, str, str]:
     maxVolts = Decimal("-1")
     maxAmps = Decimal("-1")
+    avgWatts = Decimal("-1")
+    watts = []
     with open(log_fname, "r") as f:
         for line in f:
             m = RE_PTD_LOG.match(line.rstrip("\r\n"))
@@ -145,7 +147,12 @@ def max_volts_amps(
                 parser.lit("Time")
                 parser.skip()
                 parser.lit("Watts")
-                parser.skip()
+                if amount_of_channels == 0:
+                    watts_raw = parser.decimal()
+                    if watts_raw > 0:
+                        watts.append(watts_raw)
+                else:
+                    parser.skip()
                 parser.lit("Volts")
                 volts = parser.decimal()
                 parser.lit("Amps")
@@ -167,7 +174,7 @@ def max_volts_amps(
                         channel_range.pop(0)
                     parser.skip()
                     parser.lit("Watts")
-                    parser.skip()
+                    watts_raw = parser.decimal()
                     parser.lit("Volts")
                     volts = parser.decimal()
                     parser.lit("Amps")
@@ -177,15 +184,19 @@ def max_volts_amps(
                     if is_sutable_channel:
                         maxVolts = max(maxVolts, volts)
                         maxAmps = max(maxAmps, amps)
+                        if watts_raw > 0:
+                            watts.append(watts_raw)
                     if len(channel_range) == 0:
                         break
                 if len(channel_range):
                     raise ExtraChannelError(
                         f"There are extra ptd channels in configuration"
                     )
-    if maxVolts <= 0 or maxAmps <= 0:
-        raise MaxVoltsAmpsNegativeValuesError(f"Could not find values for {mark!r}")
-    return str(maxVolts), str(maxAmps)
+    if len(watts) >= 1:
+        avgWatts = Decimal(sum(watts) / len(watts))
+    else:
+        avgWatts = Decimal(-1)
+    return str(maxVolts), str(maxAmps), str("%.6f" % avgWatts)
 
 
 def read_log(log_fname: str, mark: str) -> str:
@@ -451,6 +462,27 @@ class Ptd:
 
         self._get_initial_range()
 
+    def grab_power_data(self) -> Tuple[int, str, Optional[str], Optional[str]]:
+        # (DM) Created method that will utilize SPEC's (only) preferred way of PTD usage and data gathering
+        power_data_header = self.cmd("RL")  # RL - command to show unread samples
+        if power_data_header is not None:
+            number_of_samples = int(
+                power_data_header.split(" ")[1]
+            )  # first line of response will have message: "Last XYZ samples"
+        else:
+            number_of_samples = 0
+        grabbed_power_data = self.read(number_of_samples)
+        if grabbed_power_data is None:
+            exit_with_error_msg("Failed to get power data")
+        grabbed_uncertainty_data = self.cmd("Uncertainty")
+        grabbed_sanity_chk_data = self.cmd("Watts")
+        return (
+            number_of_samples,
+            grabbed_power_data,
+            grabbed_uncertainty_data,
+            grabbed_sanity_chk_data,
+        )
+
     def stop(self) -> None:
         self.cmd("Stop")
 
@@ -507,6 +539,27 @@ class Ptd:
         self._messages.add(cmd, reply)
         return reply
 
+    def read(self, number: int) -> Optional[str]:
+        # (DM) had to add method that will unprovokedly read "number" of lines, so we can get all power data
+        reply = ""
+        if self._proto is None:
+            return None
+        if self._process is None or self._process.poll() is not None:
+            exit_with_error_msg("PTDaemon unexpectedly terminated")
+        logging.info(f"Trying to read {number!r} lines")
+        while number:
+            rcvd = self._proto.recv()
+            if rcvd is not None:
+                reply += rcvd
+                reply += "\n"
+            else:
+                exit_with_error_msg("Some samples can't be read")
+            number -= 1
+        if reply is None:
+            exit_with_error_msg("Got no reply from PTDaemon")
+        logging.info(f"Reply from ptd: {reply!r}")
+        return reply
+
     def _get_initial_range(self) -> None:
         # Normal Response: ?Ranges,{Amp Autorange},{Amp Range},{Volt Autorange},{Volt Range}\r\n?
         # Values: for autorange settings, -1 indicates ?unknown?, 0 = disabled, 1 = enabled
@@ -545,6 +598,7 @@ class Server:
         self._summary: Optional[summarylib.Summary] = None
         self._last_session: Optional[str] = None
         self._last_session_dir_path: Optional[str] = None
+        self._ptd: Optional[Ptd] = None
 
     def handle_connection(self, p: common.Proto) -> None:
         p.enable_keepalive()
@@ -775,7 +829,8 @@ class Session:
         self._state = SessionState.INITIAL
         self._maxAmps: Optional[str] = None
         self._maxVolts: Optional[str] = None
-        self._manual_limits = False
+        self._avgWatts: Optional[str] = None
+        self._desirableCurrentRange: Optional[str] = None
 
     def start(self, mode: Mode) -> Union[bool, str]:
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
@@ -829,9 +884,9 @@ class Session:
                 self.drop()
                 return error
 
-            r = self._ptd.cmd(f"SR,A,{self._maxAmps}")
+            r = self._ptd.cmd(f"SR,A,{self._desirableCurrentRange}")
             if r and "Error" in r:
-                error = f"Error setting current range: {self._maxAmps}"
+                error = f"Error setting current range: {self._desirableCurrentRange}"
                 logging.error(error)
                 self.drop()
                 return error
@@ -871,14 +926,17 @@ class Session:
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
             self._state = SessionState.RANGING_DONE
             self._ptd.stop()
+            samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
+            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
+            formatted_log_data = log_data.replace(
+                "\n", str(",Mark," + self._id + "_ranging\n")
+            )  # honoring format of legacy spl.txt
             assert self._go_command_time is not None
             test_duration = time.monotonic() - self._go_command_time
             dirname = os.path.join(self.log_dir_path, "ranging")
             os.mkdir(dirname)
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
-                f.write(
-                    read_log(self._server._config.ptd_logfile, self._id + "_ranging")
-                )
+                f.write(formatted_log_data)
             try:
                 start_channel = 0
                 channels_amount = 0
@@ -892,12 +950,28 @@ class Session:
                         if len(self._server._config.ptd_channel) == 2:
                             channels_amount = self._server._config.ptd_channel[1]
 
-                self._maxVolts, self._maxAmps = max_volts_amps(
+                (
+                    self._maxVolts,
+                    self._maxAmps,
+                    self._avgWatts,
+                ) = max_volts_amps_avg_watts(
                     self._server._config.ptd_logfile,
                     self._id + "_ranging",
                     start_channel,
                     channels_amount,
                 )
+
+                # we will query average power consumed and depending on that, we will add fix to crest factor
+                # default is crest factor 3 (pek current is 3x rms current)
+                # PSUs under 75W don't have mandatory Power Factor Correction, so they can be arbitrarily dirty
+                # Tektronix' app note on power supplies claims that power supplies typically exhibit crest factor between 4 and 10
+                # https://assets.testequity.com/te1/Documents/pdf/power-measurements_AC-DC-an.pdf
+                # in order to achieve same peak detection, range should be 3.3 higher than max measured RMS (since crest factor of meter is 3 and 3*3.3 is almost 10 :) )
+
+                if float(self._avgWatts) < 75:
+                    self._desirableCurrentRange = str(float(self._maxAmps) * 3.3)
+                else:
+                    self._desirableCurrentRange = str(float(self._maxAmps) * 1.1)
 
             except MaxVoltsAmpsNegativeValuesError as e:
                 if test_duration < 1:
@@ -917,10 +991,13 @@ class Session:
             self._ptd.stop()
             dirname = os.path.join(self.log_dir_path, "run_1")
             os.mkdir(dirname)
+            samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
+            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
+            formatted_log_data = log_data.replace(
+                "\n", str(",Mark," + self._id + "_testing\n")
+            )  # honoring format of legacy spl.txt
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
-                f.write(
-                    read_log(self._server._config.ptd_logfile, self._id + "_testing")
-                )
+                f.write(formatted_log_data)
             with open(os.path.join(dirname, "ptd_out.txt"), "w") as f:
                 f.write(f"Power: {watts} \nUncertainty: {uncertainty}")
             self._server._summary.phase("testing", 3)
@@ -958,6 +1035,13 @@ def main() -> None:
 
     server = Server(config)
     try:
+        server._ptd = Ptd(
+            server._config.ptd_command,
+            server._config.ptd_port,
+            os.path.join(server._config.out_dir),
+        )
+        server._ptd.start()
+        server._ptd.terminate()
         common.run_server(
             config.host,
             config.port,
