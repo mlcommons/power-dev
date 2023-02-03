@@ -703,7 +703,6 @@ class Server:
             elif cmd[0] == "start" and cmd[1] == "testing" and len(cmd) == 4:
                 self.session._maxVolts = cmd[2]
                 self.session._maxAmps = cmd[3]
-                self.session._manual_limits = True
                 r = self.session.start(Mode.TESTING)
                 return unbool[int(r)] if type(r) == bool else str(r)
 
