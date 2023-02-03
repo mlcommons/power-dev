@@ -132,11 +132,13 @@ class Parser:
         return self._cur_number >= len(self.words) - 1
 
 
-def max_volts_amps(
+def max_volts_amps_avg_watts(
     log_fname: str, mark: str, start_channel: int, amount_of_channels: int
-) -> Tuple[str, str]:
+) -> Tuple[str, str, str]:
     maxVolts = Decimal("-1")
     maxAmps = Decimal("-1")
+    avgWatts = Decimal("-1")
+    watts = []
     with open(log_fname, "r") as f:
         for line in f:
             m = RE_PTD_LOG.match(line.rstrip("\r\n"))
@@ -145,7 +147,12 @@ def max_volts_amps(
                 parser.lit("Time")
                 parser.skip()
                 parser.lit("Watts")
-                parser.skip()
+                if amount_of_channels == 0:
+                    watts_raw = parser.decimal()
+                    if watts_raw > 0:
+                        watts.append(watts_raw)
+                else:
+                    parser.skip()
                 parser.lit("Volts")
                 volts = parser.decimal()
                 parser.lit("Amps")
@@ -167,7 +174,7 @@ def max_volts_amps(
                         channel_range.pop(0)
                     parser.skip()
                     parser.lit("Watts")
-                    parser.skip()
+                    watts_raw = parser.decimal()
                     parser.lit("Volts")
                     volts = parser.decimal()
                     parser.lit("Amps")
@@ -177,15 +184,19 @@ def max_volts_amps(
                     if is_sutable_channel:
                         maxVolts = max(maxVolts, volts)
                         maxAmps = max(maxAmps, amps)
+                        if watts_raw > 0:
+                            watts.append(watts_raw)
                     if len(channel_range) == 0:
                         break
                 if len(channel_range):
                     raise ExtraChannelError(
                         f"There are extra ptd channels in configuration"
                     )
-    if maxVolts <= 0 or maxAmps <= 0:
-        raise MaxVoltsAmpsNegativeValuesError(f"Could not find values for {mark!r}")
-    return str(maxVolts), str(maxAmps)
+    if len(watts) >= 1:
+        avgWatts = Decimal(sum(watts) / len(watts))
+    else:
+        avgWatts = Decimal(-1)
+    return str(maxVolts), str(maxAmps), str("%.6f" % avgWatts)
 
 
 def read_log(log_fname: str, mark: str) -> str:
@@ -812,6 +823,8 @@ class Session:
         self._state = SessionState.INITIAL
         self._maxAmps: Optional[str] = None
         self._maxVolts: Optional[str] = None
+        self._avgWatts: Optional[str] = None
+        self._desirableCurrentRange: Optional[str] = None
 
     def start(self, mode: Mode) -> bool:
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
@@ -855,7 +868,7 @@ class Session:
             self._server._summary.phase("testing", 0)
             self._ptd.start()
             self._ptd.cmd(f"SR,V,{self._maxVolts}")
-            self._ptd.cmd(f"SR,A,{self._maxAmps}")
+            self._ptd.cmd(f"SR,A,{self._desirableCurrentRange}")
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting testing mode")
@@ -914,12 +927,28 @@ class Session:
                         if len(self._server._config.ptd_channel) == 2:
                             channels_amount = self._server._config.ptd_channel[1]
 
-                self._maxVolts, self._maxAmps = max_volts_amps(
+                (
+                    self._maxVolts,
+                    self._maxAmps,
+                    self._avgWatts,
+                ) = max_volts_amps_avg_watts(
                     self._server._config.ptd_logfile,
                     self._id + "_ranging",
                     start_channel,
                     channels_amount,
                 )
+
+                # we will query average power consumed and depending on that, we will add fix to crest factor
+                # default is crest factor 3 (pek current is 3x rms current)
+                # PSUs under 75W don't have mandatory Power Factor Correction, so they can be arbitrarily dirty
+                # Tektronix' app note on power supplies claims that power supplies typically exhibit crest factor between 4 and 10
+                # https://assets.testequity.com/te1/Documents/pdf/power-measurements_AC-DC-an.pdf
+                # in order to achieve same peak detection, range should be 3.3 higher than max measured RMS (since crest factor of meter is 3 and 3*3.3 is almost 10 :) )
+
+                if float(self._avgWatts) < 75:
+                    self._desirableCurrentRange = str(float(self._maxAmps) * 3.3)
+                else:
+                    self._desirableCurrentRange = str(float(self._maxAmps) * 1.1)
 
             except MaxVoltsAmpsNegativeValuesError as e:
                 if test_duration < 1:
