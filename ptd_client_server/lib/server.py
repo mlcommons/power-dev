@@ -451,6 +451,27 @@ class Ptd:
 
         self._get_initial_range()
 
+    def grab_power_data(self) -> Tuple[int, str, Optional[str], Optional[str]]:
+        # (DM) Created method that will utilize SPEC's (only) preferred way of PTD usage and data gathering
+        power_data_header = self.cmd("RL")  # RL - command to show unread samples
+        if power_data_header is not None:
+            number_of_samples = int(
+                power_data_header.split(" ")[1]
+            )  # first line of response will have message: "Last XYZ samples"
+        else:
+            number_of_samples = 0
+        grabbed_power_data = self.read(number_of_samples)
+        if grabbed_power_data is None:
+            exit_with_error_msg("Failed to get power data")
+        grabbed_uncertainty_data = self.cmd("Uncertainty")
+        grabbed_sanity_chk_data = self.cmd("Watts")
+        return (
+            number_of_samples,
+            grabbed_power_data,
+            grabbed_uncertainty_data,
+            grabbed_sanity_chk_data,
+        )
+
     def stop(self) -> None:
         self.cmd("Stop")
 
@@ -505,6 +526,27 @@ class Ptd:
             exit_with_error_msg("Got no reply from PTDaemon")
         logging.info(f"Reply from ptd: {reply!r}")
         self._messages.add(cmd, reply)
+        return reply
+
+    def read(self, number: int) -> Optional[str]:
+        # (DM) had to add method that will unprovokedly read "number" of lines, so we can get all power data
+        reply = ""
+        if self._proto is None:
+            return None
+        if self._process is None or self._process.poll() is not None:
+            exit_with_error_msg("PTDaemon unexpectedly terminated")
+        logging.info(f"Trying to read {number!r} lines")
+        while number:
+            rcvd = self._proto.recv()
+            if rcvd is not None:
+                reply += rcvd
+                reply += "\n"
+            else:
+                exit_with_error_msg("Some samples can't be read")
+            number -= 1
+        if reply is None:
+            exit_with_error_msg("Got no reply from PTDaemon")
+        logging.info(f"Reply from ptd: {reply!r}")
         return reply
 
     def _get_initial_range(self) -> None:
@@ -848,14 +890,17 @@ class Session:
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
             self._state = SessionState.RANGING_DONE
             self._ptd.stop()
+            samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
+            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
+            formatted_log_data = log_data.replace(
+                "\n", str(",Mark," + self._id + "_ranging\n")
+            )  # honoring format of legacy spl.txt
             assert self._go_command_time is not None
             test_duration = time.monotonic() - self._go_command_time
             dirname = os.path.join(self.log_dir_path, "ranging")
             os.mkdir(dirname)
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
-                f.write(
-                    read_log(self._server._config.ptd_logfile, self._id + "_ranging")
-                )
+                f.write(formatted_log_data)
             try:
                 start_channel = 0
                 channels_amount = 0
@@ -892,10 +937,13 @@ class Session:
             self._ptd.stop()
             dirname = os.path.join(self.log_dir_path, "run_1")
             os.mkdir(dirname)
+            samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
+            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
+            formatted_log_data = log_data.replace(
+                "\n", str(",Mark," + self._id + "_testing\n")
+            )  # honoring format of legacy spl.txt
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
-                f.write(
-                    read_log(self._server._config.ptd_logfile, self._id + "_testing")
-                )
+                f.write(formatted_log_data)
             self._server._summary.phase("testing", 3)
             return True
 
