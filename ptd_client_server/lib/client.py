@@ -199,6 +199,12 @@ def main() -> None:
     parser.add_argument(
         "-S", "--stop-server", action="store_true",
         help="stop the server after processing this client")
+    parser.add_argument(
+        "-A", "--max-amps", type=float, default=0,
+        help="Use the given current value (in Amperes) as the max limit (Experimental)")
+    parser.add_argument(
+        "-V", "--max-volts", type=float, default=0,
+        help="Use the given current voltage (in Volts) as the max limit (Experimental)")
     # fmt: on
     common.log_redirect.start()
 
@@ -281,14 +287,28 @@ def main() -> None:
         power_dir = os.path.join(args.output, session, "power")
     os.mkdir(power_dir)
 
-    for mode in ["ranging", "testing"]:
+    if args.max_amps > 0 and args.max_volts > 0:
+        logging.warning(
+            f"Providing manual ranges are only for experimental purpose and the produced results won't be valid for submission"
+        )
+        needed_modes = ["testing"]
+    else:
+        needed_modes = ["ranging", "testing"]
+
+    for mode in needed_modes:
         logging.info(f"Running workload in {mode} mode")
         out = os.path.join(out_dir, "run_1" if mode == "testing" else mode)
 
         sync_check()
 
         summary.phase(mode, 0)
-        command(f"session,{session},start,{mode}", check=True)
+        if args.max_amps > 0 and args.max_volts > 0:
+            command(
+                f"session,{session},start,{mode},{args.max_volts},{args.max_amps}",
+                check=True,
+            )
+        else:
+            command(f"session,{session},start,{mode}", check=True)
 
         summary.phase(mode, 1)
         logging.info(f"Running the workload {args.run_workload!r}")
@@ -332,6 +352,8 @@ def main() -> None:
     command(f"session,{session},done", check=True)
 
     for fname in common.FETCH_FILES_LIST:
+        if "ranging" in fname and args.max_amps > 0 and args.max_volts > 0:
+            continue
         command.download(f"download,{session},{fname}", os.path.join(out_dir, fname))
 
     command(f"cleanup,{session}", check=True)
