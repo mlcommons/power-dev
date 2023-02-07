@@ -883,9 +883,9 @@ class Session:
                 self.drop()
                 return error
 
-            r = self._ptd.cmd(f"SR,A,{self._desirableCurrentRange}")
+            r = self._ptd.cmd(f"SR,A,{self._maxAmps}")
             if r and "Error" in r:
-                error = f"Error setting current range: {self._desirableCurrentRange}"
+                error = f"Error setting current range: {self._maxAmps}"
                 logging.error(error)
                 self.drop()
                 return error
