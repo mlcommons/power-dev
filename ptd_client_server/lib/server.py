@@ -870,7 +870,11 @@ class Session:
             return True
 
         if mode == Mode.TESTING and (
-            (self._state == SessionState.INITIAL and self._maxVolts and self._desirableCurrentRange)
+            (
+                self._state == SessionState.INITIAL
+                and self._maxVolts
+                and self._desirableCurrentRange
+            )
             or self._state == SessionState.RANGING_DONE
         ):
             self._server._summary.phase("testing", 0)
