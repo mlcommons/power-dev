@@ -893,7 +893,9 @@ class Session:
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting testing mode")
-            logging.info(f"maxAmps: {self._desirableCurrentRange}, maxVolts: {self._maxVolts}")
+            logging.info(
+                f"maxAmps: {self._desirableCurrentRange}, maxVolts: {self._maxVolts}"
+            )
             self._ptd.cmd(f"Go,1000,0,{self._id}_testing")
 
             self._state = SessionState.TESTING
