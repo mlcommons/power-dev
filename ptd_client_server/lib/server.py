@@ -972,13 +972,13 @@ class Session:
                 # Tektronix' app note on power supplies claims that power supplies typically exhibit crest factor between 4 and 10
                 # https://assets.testequity.com/te1/Documents/pdf/power-measurements_AC-DC-an.pdf
                 # in order to achieve same peak detection, range should be 3.3 higher than max measured RMS (since crest factor of meter is 3 and 3*3.3 is almost 10 :) )
-                # but scaling to 3.3 times can cause uncertain measurements for some power ranges and so as a compromise
-                # until new PTDaemon is released we are using a scale factor of 1.5 for devices < 75W
+                # but scaling to 3.3 times can cause uncertain measurements for some power ranges and so we are not
+                # using any scaling as of now
 
                 if float(self._avgWatts) < 75:
-                    self._desirableCurrentRange = str(float(self._maxAmps) * 1.5)
+                    self._desirableCurrentRange = str(float(self._maxAmps) * 1)
                 else:
-                    self._desirableCurrentRange = str(float(self._maxAmps) * 1.1)
+                    self._desirableCurrentRange = str(float(self._maxAmps) * 1)
 
             except MaxVoltsAmpsNegativeValuesError as e:
                 if test_duration < 1:
