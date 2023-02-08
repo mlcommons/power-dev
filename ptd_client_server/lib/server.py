@@ -702,7 +702,7 @@ class Server:
                 return unbool[int(self.session.start(Mode.TESTING))]
             elif cmd[0] == "start" and cmd[1] == "testing" and len(cmd) == 4:
                 self.session._maxVolts = cmd[2]
-                self.session._maxAmps = cmd[3]
+                self.session._desirableCurrentRange = cmd[3]
                 r = self.session.start(Mode.TESTING)
                 return unbool[int(r)] if type(r) == bool else str(r)
 
@@ -870,7 +870,7 @@ class Session:
             return True
 
         if mode == Mode.TESTING and (
-            (self._state == SessionState.INITIAL and self._maxVolts and self._maxAmps)
+            (self._state == SessionState.INITIAL and self._maxVolts and self._desirableCurrentRange)
             or self._state == SessionState.RANGING_DONE
         ):
             self._server._summary.phase("testing", 0)
@@ -883,9 +883,9 @@ class Session:
                 self.drop()
                 return error
 
-            r = self._ptd.cmd(f"SR,A,{self._maxAmps}")
+            r = self._ptd.cmd(f"SR,A,{self._desirableCurrentRange}")
             if r and "Error" in r:
-                error = f"Error setting current range: {self._maxAmps}"
+                error = f"Error setting current range: {self._desirableCurrentRange}"
                 logging.error(error)
                 self.drop()
                 return error
@@ -893,7 +893,7 @@ class Session:
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting testing mode")
-            logging.info(f"maxAmps: {self._maxAmps}, maxVolts: {self._maxVolts}")
+            logging.info(f"maxAmps: {self._desirableCurrentRange}, maxVolts: {self._maxVolts}")
             self._ptd.cmd(f"Go,1000,0,{self._id}_testing")
 
             self._state = SessionState.TESTING
@@ -961,14 +961,16 @@ class Session:
                 )
 
                 # we will query average power consumed and depending on that, we will add fix to crest factor
-                # default is crest factor 3 (pek current is 3x rms current)
+                # default is crest factor 3 (peak current is 3x rms current)
                 # PSUs under 75W don't have mandatory Power Factor Correction, so they can be arbitrarily dirty
                 # Tektronix' app note on power supplies claims that power supplies typically exhibit crest factor between 4 and 10
                 # https://assets.testequity.com/te1/Documents/pdf/power-measurements_AC-DC-an.pdf
                 # in order to achieve same peak detection, range should be 3.3 higher than max measured RMS (since crest factor of meter is 3 and 3*3.3 is almost 10 :) )
+                # but scaling to 3.3 times can cause uncertain measurements for some power ranges and so as a compromise
+                # until new PTDaemon is released we are using a scale factor of 1.5 for devices < 75W
 
                 if float(self._avgWatts) < 75:
-                    self._desirableCurrentRange = str(float(self._maxAmps) * 3.3)
+                    self._desirableCurrentRange = str(float(self._maxAmps) * 1.5)
                 else:
                     self._desirableCurrentRange = str(float(self._maxAmps) * 1.1)
 
