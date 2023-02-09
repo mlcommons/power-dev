@@ -38,7 +38,7 @@ def update_sources_checksum() -> None:
         print(f"{sources_checksums_path!r} up to date")
         return
 
-    sources_sample.append(calc_s)
+    sources_sample.append(dict(sorted(calc_s.items())))
 
     with open(sources_checksums_path, "w", encoding="utf-8") as f:
         json.dump(sources_sample, f, ensure_ascii=False, indent=4)
