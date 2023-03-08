@@ -329,13 +329,11 @@ def phases_check(
     comapre_time(phases_testing_c, phases_testing_s, TESTING_MODE)
 
     def compare_duration(range_duration: float, test_duration: float) -> None:
-        duration_diff = abs(range_duration - test_duration) / max(
-            range_duration, test_duration
-        )
+        duration_diff = (range_duration - test_duration) / range_duration
 
         assert (
             duration_diff < 0.05
-        ), "Duration of the ranging mode differs from the duration of testing mode by more than 5 percent"
+        ), f"Duration of the testing mode ({round(test_duration,2)}) is lower than that of ranging mode ({round(range_duration,2)}) by {round(duration_diff*100,2)} percent which is more than the allowed 5 percent limit."
 
     def compare_time_boundaries(
         begin: float, end: float, phases: List[Any], mode: str
