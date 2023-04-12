@@ -71,6 +71,9 @@ COMMON_ERROR_RANGING = [
     "Bad volts reading nan from ",
 ]
 COMMON_ERROR_TESTING = ["USB."]
+WARNING_NEEDS_TO_BE_ERROR_TESTING_RE = [
+    re.compile(r"Uncertainty \d+.\d+%, which is above 1.00% limit for the last sample!")
+]
 
 
 def _normalize(path: str) -> str:
@@ -545,6 +548,13 @@ def check_ptd_logs(
                     )
             else:
                 if start_load_time < log_time < stop_load_time:
+                    for warning_to_be_error in WARNING_NEEDS_TO_BE_ERROR_TESTING_RE:
+                        warning_line = warning_to_be_error.search(
+                            problem_line.group(0).strip()
+                        )
+                        if warning_line and warning_line.group(0):
+                            assert False, f"{line.strip()!r} during testing phase."
+
                     raise CheckerWarning(
                         f"{line.strip()!r} in ptd_log.txt during load stage"
                     )
