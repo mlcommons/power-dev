@@ -63,7 +63,13 @@ RESULT_PATHS = [
     TESTING_MODE + "/spl.txt",
 ]
 
-COMMON_ERROR_RANGING = ["Can't evaluate uncertainty of this sample!"]
+COMMON_ERROR_RANGING = [
+    "Can't evaluate uncertainty of this sample!",
+    "Bad watts reading nan from ",
+    "Bad amps reading nan from ",
+    "Bad pf reading nan from ",
+    "Bad volts reading nan from "
+]
 COMMON_ERROR_TESTING = ["USB."]
 
 
@@ -74,12 +80,11 @@ def _normalize(path: str) -> str:
         if parts[0] == path:  # sentinel for absolute paths
             allparts.insert(0, parts[0])
             break
-        elif parts[1] == path:  # sentinel for relative paths
+        if parts[1] == path:  # sentinel for relative paths
             allparts.insert(0, parts[1])
             break
-        else:
-            path = parts[0]
-            allparts.insert(0, parts[1])
+        path = parts[0]
+        allparts.insert(0, parts[1])
     return "/".join(allparts)
 
 
@@ -321,9 +326,11 @@ def phases_check(
             phases_server
         ), f"Phases amount is not equal for {mode} mode."
         for i in range(len(phases_client)):
+            time_difference = abs(phases_client[i][0] - phases_server[i][0])
             assert (
-                abs(phases_client[i][0] - phases_server[i][0]) <= 0.5
-            ), f"The time difference for {i + 1} phase of {mode} mode is more than 500ms."
+                time_difference <= 0.5
+            ), f"The time difference for {i + 1} phase of {mode} mode is more than 500ms."\
+                f"Observed difference is {time_difference * 1000}ms"
 
     comapre_time(phases_ranging_c, phases_ranging_s, RANGING_MODE)
     comapre_time(phases_testing_c, phases_testing_s, TESTING_MODE)
@@ -333,7 +340,9 @@ def phases_check(
 
         assert (
             duration_diff < 0.05
-        ), f"Duration of the testing mode ({round(test_duration,2)}) is lower than that of ranging mode ({round(range_duration,2)}) by {round(duration_diff*100,2)} percent which is more than the allowed 5 percent limit."
+        ), f"Duration of the testing mode ({round(test_duration,2)}) is lower than that of "\
+                f"ranging mode ({round(range_duration,2)}) by {round(duration_diff*100,2)} "\
+                f"percent which is more than the allowed 5 percent limit."
 
     def compare_time_boundaries(
         begin: float, end: float, phases: List[Any], mode: str
@@ -518,17 +527,21 @@ def check_ptd_logs(
             if start_ranging_time is None or stop_ranging_time is None:
                 assert False, "Can not find ranging time in ptd_logs.txt."
             if error:
-                if problem_line.group(0).strip() == COMMON_ERROR_TESTING[0]:
+                if problem_line.group(0).strip() in COMMON_ERROR_TESTING:
                     raise CheckerWarning(
                         f"{line.strip()!r} in ptd_log.txt during testing stage but it is accepted. Treated as WARNING"
                     )
                 assert (
                     start_ranging_time < log_time < stop_ranging_time
                 ), f"{line.strip()!r} in ptd_log.txt"
+
+                # Treat uncommon errors in ranging phase as warnings
                 if (
-                    not problem_line.group(0)
-                    .strip()
-                    .startswith(COMMON_ERROR_RANGING[0])
+                    all (
+                        not problem_line.group(0)
+                            .strip()
+                            .startswith(common_ranging_error) for common_ranging_error in COMMON_ERROR_RANGING
+                    )
                 ):
                     raise CheckerWarning(
                         f"{line.strip()!r} in ptd_log.txt during ranging stage. Treated as WARNING"
