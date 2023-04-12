@@ -78,6 +78,7 @@ def sync(
         return False
     return True
 
+
 def sync_check_with_remote(
     get_remote_time: Callable[[], float],
 ) -> bool:

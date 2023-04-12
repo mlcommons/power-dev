@@ -270,7 +270,6 @@ def main() -> None:
         ):
             exit()
 
-
     summary.client_uuid = uuid.uuid4()
     try:
         session = command(f"new,{args.label},{summary.client_uuid}")
