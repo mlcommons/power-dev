@@ -319,7 +319,7 @@ def phases_check(
     phases_ranging_s = server_sd.json_object["phases"]["ranging"]
     phases_testing_s = server_sd.json_object["phases"]["testing"]
 
-    def comapre_time(
+    def compare_time(
         phases_client: List[List[float]], phases_server: List[List[float]], mode: str
     ) -> None:
         assert len(phases_client) == len(
@@ -332,8 +332,8 @@ def phases_check(
                 f"Observed difference is {time_difference * 1000}ms"
             )
 
-    comapre_time(phases_ranging_c, phases_ranging_s, RANGING_MODE)
-    comapre_time(phases_testing_c, phases_testing_s, TESTING_MODE)
+    compare_time(phases_ranging_c, phases_ranging_s, RANGING_MODE)
+    compare_time(phases_testing_c, phases_testing_s, TESTING_MODE)
 
     def compare_duration(range_duration: float, test_duration: float) -> None:
         duration_diff = (range_duration - test_duration) / range_duration
