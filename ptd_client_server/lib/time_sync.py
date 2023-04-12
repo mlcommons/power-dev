@@ -78,6 +78,18 @@ def sync(
         return False
     return True
 
+def sync_check_with_remote(
+    get_remote_time: Callable[[], float],
+) -> bool:
+    try:
+        if not validate_remote(get_remote_time):
+            logging.error("Could not synchronize with the server")
+            return False
+    except Exception:
+        logging.exception("Got an exception. Could not synchronize")
+        return False
+    return True
+
 
 def validate_remote(command: Callable[[], float]) -> bool:
     time1 = time.time()
