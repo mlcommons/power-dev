@@ -691,6 +691,8 @@ def check(path: str) -> int:
         result &= check_result
         warnings |= check_warnings
 
+    print('WARNING: You are using the master branch. This is not a legal submission.')
+    print('WARNING: Make sure to use the appropriate release branch for your submission.')
     print(
         f"\n{'All' if result else 'ERROR: Not all'} checks passed"
         f"{'. Warnings encountered, check for audit!' if warnings else ''}"
