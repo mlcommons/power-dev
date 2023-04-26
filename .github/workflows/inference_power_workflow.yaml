@@ -1,6 +1,6 @@
 name: Check Python for ptd_client_server
 on:
-  pull_request:
+  push:
     branches: [ "master" ]
     paths:
     - 'ptd_client_server/**'
