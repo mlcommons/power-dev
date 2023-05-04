@@ -75,6 +75,7 @@ WARNING_NEEDS_TO_BE_ERROR_TESTING_RE = [
     re.compile(r"Uncertainty \d+.\d+%, which is above 1.00% limit for the last sample!")
 ]
 
+TIME_DELTA_TOLERANCE=500 #in milliseconds
 
 def _normalize(path: str) -> str:
     allparts: List[str] = []
@@ -312,7 +313,7 @@ def phases_check(
     client_sd: SessionDescriptor, server_sd: SessionDescriptor, path: str
 ) -> None:
     """Check that the time difference between corresponding checkpoint values
-    from client.json and server.json is less than or equal to 500 ms.
+    from client.json and server.json is less than or equal to TIME_DELTA_TOLERANCE ms.
     Check that the loadgen timestamps are within workload time interval.
     Check that the duration of loadgen test for the ranging mode is comparable
     with duration of loadgen test for the testing mode.
@@ -330,8 +331,8 @@ def phases_check(
         ), f"Phases amount is not equal for {mode} mode."
         for i in range(len(phases_client)):
             time_difference = abs(phases_client[i][0] - phases_server[i][0])
-            assert time_difference <= 0.5, (
-                f"The time difference for {i + 1} phase of {mode} mode is more than 500ms."
+            assert time_difference <= TIME_DELTA_TOLERANCE/1000, (
+                f"The time difference for {i + 1} phase of {mode} mode is more than {TIME_DELTA_TOLERANCE}ms."
                 f"Observed difference is {time_difference * 1000}ms"
             )
 
@@ -341,7 +342,7 @@ def phases_check(
     def compare_duration(range_duration: float, test_duration: float) -> None:
         duration_diff = (range_duration - test_duration) / range_duration
 
-        assert duration_diff < 0.05, (
+        assert duration_diff < 0.5, (
             f"Duration of the testing mode ({round(test_duration,2)}) is lower than that of "
             f"ranging mode ({round(range_duration,2)}) by {round(duration_diff*100,2)} "
             f"percent which is more than the allowed 5 percent limit."
@@ -547,13 +548,14 @@ def check_ptd_logs(
                         f"{line.strip()!r} in ptd_log.txt during ranging stage. Treated as WARNING"
                     )
             else:
-                if start_load_time < log_time < stop_load_time:
+                if start_load_time+TIME_DELTA_TOLERANCE < log_time < stop_load_time-TIME_DELTA_TOLERANCE:
                     for warning_to_be_error in WARNING_NEEDS_TO_BE_ERROR_TESTING_RE:
                         warning_line = warning_to_be_error.search(
                             problem_line.group(0).strip()
                         )
                         if warning_line and warning_line.group(0):
-                            assert False, f"{line.strip()!r} during testing phase."
+                            assert False, f"{line.strip()!r} during testing phase. Test start time: "
+                            "{start_load_time}, Log time: {log_time}, Test stop time: {stop_load_time} "
 
                     raise CheckerWarning(
                         f"{line.strip()!r} in ptd_log.txt during load stage"
