@@ -1,0 +1,38 @@
+name: Check Python for ptd_client_server
+on:
+  push:
+    branches: [ "master" ]
+    paths:
+    - 'ptd_client_server/**'
+    - '.github/workflows/python_ptd_client_server.yaml'
+jobs:
+   cm_check:
+    name: Check power workflow
+    runs-on: "${{ matrix.on }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ 3.9 ]
+        on: [ubuntu-latest]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install cmind
+        cm pull repo mlcommons@ck
+        cm run script --quiet --tags=get,sys-utils-cm
+ 
+    - name: Start power server
+      run: |
+        cm run script --tags=run,mlperf,power,server --device_type=0 --screen=yes --quiet --env.CM_GH_TOKEN=${{ secrets.ACCESS_TOKEN }}
+
+    - name: Test CM Script for MLPerf Inference ResNet50 with power
+      run: |
+        cm run script --tags=run,mlperf,inference,generate-run-cmds,_performance-only,_short --submitter="cTuning" --model=resnet50 --backend=onnxruntime --device=cpu --scenario=Offline --test_query_count=5 --precision=fp32 --quiet --power=yes
