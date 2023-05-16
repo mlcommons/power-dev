@@ -264,6 +264,12 @@ def main() -> None:
 
     sync_check()
 
+    def sync_check_with_remote() -> None:
+        if not time_sync.sync_check_with_remote(
+            lambda: float(command("time")),
+        ):
+            exit()
+
     summary.client_uuid = uuid.uuid4()
     try:
         session = command(f"new,{args.label},{summary.client_uuid}")
@@ -311,14 +317,17 @@ def main() -> None:
             command(f"session,{session},start,{mode}", check=True)
 
         summary.phase(mode, 1)
+        sync_check_with_remote()
         logging.info(f"Running the workload {args.run_workload!r}")
         time_load_start = time.time()
         subprocess.run(args.run_workload, shell=True, check=True)
         time_load_end = time.time()
+        sync_check_with_remote()
         summary.phase(mode, 2)
 
         command(f"session,{session},stop,{mode}", check=True)
         summary.phase(mode, 3)
+        sync_check_with_remote()
 
         loadgen_logs = find_loadgen_logs(
             args.loadgen_logs, time_load_start, time_load_end

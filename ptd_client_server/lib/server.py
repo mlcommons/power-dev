@@ -488,7 +488,6 @@ class Ptd:
 
     def terminate(self) -> None:
         if self._proto is not None:
-            self.cmd("Stop")
             self.cmd(f"SR,V,{self._init_Volts}")
             self.cmd(f"SR,A,{self._init_Amps}")
             logging.info(
