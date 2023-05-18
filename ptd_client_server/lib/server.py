@@ -63,6 +63,8 @@ MULTICHANNEL_DEVICES = [48, 59, 61, 77]
 # https://github.com/mlcommons/power-dev/issues/220#issue-835336923
 DEVICE_TYPE_WT500 = 48
 
+DC_DEVICES = [508, 549, 586]
+
 MAX_RANGE_FOR_DEVICE = {
     8: 20,  # WT210
     49: 20,  # WT310
@@ -72,6 +74,10 @@ MAX_RANGE_FOR_DEVICE = {
     48: 40,  # WT500_multichannel
     47: 50,  # WT1800
     66: 30,  # WT5000
+    508: 20,  # WT210 DC
+    549: 20,  # WT310 DC
+    586: 20,  # WT330 DC
+
 }
 
 
@@ -296,11 +302,13 @@ class ServerConfig:
             "ptd", "channel", parse=parse_channel, fallback=None
         )
         self.ptd_device_type: int = get("ptd", "deviceType", parse=int)
+        ptd_dc_flag: Optional[str] = get("ptd", "dcFlag", fallback=None)
         ptd_interface_flag: str = get("ptd", "interfaceFlag")
         ptd_device_port: str = get("ptd", "devicePort")
         ptd_board_num: Optional[int] = get("ptd", "gpibBoard", parse=int, fallback=None)
         # TODO: validate ptd_interface_flag?
         # TODO: validate ptd_device_type?
+        # we can have a list of supported/tested devices and throw a warning when new device is used?
         self.ptd_logfile: str = os.path.join(self.tmp_dir.name, "ptd_logfile.txt")
         self.ptd_port: int = get("ptd", "networkPort", parse=int, fallback="8888")
         self.ptd_command: List[str] = [
@@ -315,6 +323,7 @@ class ServerConfig:
                 if self.ptd_channel is None
                 else ["-c", ",".join(str(x) for x in self.ptd_channel)]
             ),
+            *([] if ptd_dc_flag is None else [ptd_dc_flag]),
             *([] if ptd_interface_flag == "" else [ptd_interface_flag]),
             str(self.ptd_device_type),
             ptd_device_port,
@@ -324,6 +333,7 @@ class ServerConfig:
             "command": self.ptd_command,
             "device_type": self.ptd_device_type,
             "interface_flag": ptd_interface_flag,
+            "dc_flag": ptd_dc_flag,
             "device_port": ptd_device_port,
             "channel": self.ptd_channel,
         }
