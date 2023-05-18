@@ -77,7 +77,6 @@ MAX_RANGE_FOR_DEVICE = {
     508: 20,  # WT210 DC
     549: 20,  # WT310 DC
     586: 20,  # WT330 DC
-
 }
 
 
