@@ -437,7 +437,7 @@ def phases_check(
 
     assert delta < 5, (
         f"Average power delta between the ranging and testing mode run is > 5%. "
-        f"Observed delta is {delta} "
+        f"Observed delta is {delta}% "
         f"with avg. ranging power {ranging_watts}, avg.testing power {testing_watts}, "
         f"avg. ranging power factor {ranging_pf} and avg. testing power factor {testing_pf}"
     )
