@@ -74,7 +74,7 @@ COMMON_ERROR_RANGING = [
     "Bad amps reading nan from ",
     "Bad pf reading nan from ",
     "Bad volts reading nan from ",
-    "Current appears to be too high for set range"
+    "Current appears to be too high for set range",
 ]
 COMMON_ERROR_TESTING = ["USB."]
 WARNING_NEEDS_TO_BE_ERROR_TESTING_RE = [
@@ -385,10 +385,7 @@ def phases_check(
 
     compare_duration(ranging_duration_d, testing_duration_d)
 
-    def get_avg_power(
-        power_path: str,
-        run_path: str
-        ) -> float:
+    def get_avg_power(power_path: str, run_path: str) -> float:
 
         # parse the power logs
 
@@ -405,8 +402,9 @@ def phases_check(
 
         with open(spl_fname) as f:
             for line in f:
-                timestamp = (datetime.strptime(
-                    line.split(",")[1], datetime_format)).timestamp()
+                timestamp = (
+                    datetime.strptime(line.split(",")[1], datetime_format)
+                ).timestamp()
                 if timestamp > power_begin and timestamp < power_end:
                     cpower = float(line.split(",")[3])
                     cpf = float(line.split(",")[9])
@@ -416,31 +414,35 @@ def phases_check(
                         pf_list.append(cpf)
 
         if len(power_list) == 0:
-            power= -1
+            power = -1
         else:
-            power= sum(power_list) / len(power_list)
+            power = sum(power_list) / len(power_list)
         if len(pf_list) == 0:
-            pf= -1
+            pf = -1
         else:
-            pf= sum(pf_list) / len(pf_list)
-        return power,pf
+            pf = sum(pf_list) / len(pf_list)
+        return power, pf
 
-    ranging_watts,ranging_pf = get_avg_power(os.path.join(path, "power"), os.path.join(path, "ranging"))
-    testing_watts,testing_pf = get_avg_power(os.path.join(path, "power"), os.path.join(path, "run_1"))
-    ranging_watts=round(ranging_watts,5)
-    testing_watts=round(testing_watts,5)
-    ranging_pf=round(ranging_pf,5)
-    testing_pf=round(testing_pf,5)
+    ranging_watts, ranging_pf = get_avg_power(
+        os.path.join(path, "power"), os.path.join(path, "ranging")
+    )
+    testing_watts, testing_pf = get_avg_power(
+        os.path.join(path, "power"), os.path.join(path, "run_1")
+    )
+    ranging_watts = round(ranging_watts, 5)
+    testing_watts = round(testing_watts, 5)
+    ranging_pf = round(ranging_pf, 5)
+    testing_pf = round(testing_pf, 5)
 
-    delta = round(((1-(float(testing_watts)/float(ranging_watts))) *100),2)
+    delta = round(((1 - (float(testing_watts) / float(ranging_watts))) * 100), 2)
 
     assert delta < 5, (
-        f"Average power delta between the ranging and testing mode run is > 5%. "\
-        f"Observed delta is {delta} "\
-        f"with avg. ranging power {ranging_watts}, avg.testing power {testing_watts}, "\
+        f"Average power delta between the ranging and testing mode run is > 5%. "
+        f"Observed delta is {delta} "
+        f"with avg. ranging power {ranging_watts}, avg.testing power {testing_watts}, "
         f"avg. ranging power factor {ranging_pf} and avg. testing power factor {testing_pf}"
     )
-    #print(f"{path},{ranging_watts},{testing_watts},{delta}%,{ranging_pf},{testing_pf}\n")
+    # print(f"{path},{ranging_watts},{testing_watts},{delta}%,{ranging_pf},{testing_pf}\n")
 
 
 def session_name_check(
