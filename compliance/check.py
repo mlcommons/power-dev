@@ -385,7 +385,7 @@ def phases_check(
 
     compare_duration(ranging_duration_d, testing_duration_d)
 
-    def get_avg_power(power_path: str, run_path: str) -> float:
+    def get_avg_power(power_path: str, run_path: str):
         # parse the power logs
 
         power_begin, power_end = _get_begin_end_time_from_mlperf_log_detail(
@@ -413,11 +413,11 @@ def phases_check(
                         pf_list.append(cpf)
 
         if len(power_list) == 0:
-            power = -1
+            power = -1.0
         else:
             power = sum(power_list) / len(power_list)
         if len(pf_list) == 0:
-            pf = -1
+            pf = -1.0
         else:
             pf = sum(pf_list) / len(pf_list)
         return power, pf
