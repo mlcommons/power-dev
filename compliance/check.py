@@ -385,7 +385,7 @@ def phases_check(
 
     compare_duration(ranging_duration_d, testing_duration_d)
 
-    def get_avg_power(power_path: str, run_path: str):
+    def get_avg_power(power_path: str, run_path: str) -> Tuple[float, float]:
         # parse the power logs
 
         power_begin, power_end = _get_begin_end_time_from_mlperf_log_detail(
