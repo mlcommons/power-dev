@@ -433,10 +433,10 @@ def phases_check(
     ranging_pf = round(ranging_pf, 5)
     testing_pf = round(testing_pf, 5)
 
-    delta = round(((1 - (float(testing_watts) / float(ranging_watts))) * 100), 2)
+    delta = round((float(testing_watts) / float(ranging_watts) - 1) * 100, 2)
 
-    assert delta < 5, (
-        f"Average power delta between the ranging and testing mode run is > 5%. "
+    assert delta > -5, (
+        f"Average power during the testing mode run is lower than that during the ranging run by more than 5%. "
         f"Observed delta is {delta}% "
         f"with avg. ranging power {ranging_watts}, avg.testing power {testing_watts}, "
         f"avg. ranging power factor {ranging_pf} and avg. testing power factor {testing_pf}"
