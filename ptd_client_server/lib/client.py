@@ -303,6 +303,7 @@ def main() -> None:
 
     for mode in needed_modes:
         logging.info(f"Running workload in {mode} mode")
+        os.environ["MLPERF_POWER_MODE"] = mode
         out = os.path.join(out_dir, "run_1" if mode == "testing" else mode)
 
         sync_check()
