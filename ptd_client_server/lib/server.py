@@ -972,10 +972,15 @@ class Session:
                 # https://assets.testequity.com/te1/Documents/pdf/power-measurements_AC-DC-an.pdf
                 # in order to achieve same peak detection, range should be 3.3 higher than max measured RMS (since crest factor of meter is 3 and 3*3.3 is almost 10 :) )
 
-                if float(self._avgWatts) < 75:
-                    self._desirableCurrentRange = str(float(self._maxAmps) * 3.3)
-                else:
-                    self._desirableCurrentRange = str(float(self._maxAmps) * 1.1)
+                # DM:
+                # will have to deprecate this (forever), since it will cause increase in uncertainties (up to about 2.5x), so might easily blow over 1%.
+
+                # if float(self._avgWatts) < 75:
+                #     self._desirableCurrentRange = str(float(self._maxAmps) * 3.3)
+                # else:
+                #     self._desirableCurrentRange = str(float(self._maxAmps) * 1.1)
+
+                self._desirableCurrentRange = str(float(self._maxAmps) * 1.1)
 
             except MaxVoltsAmpsNegativeValuesError as e:
                 if test_duration < 1:
