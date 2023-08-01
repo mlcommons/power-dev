@@ -24,7 +24,7 @@ import time
 from ptd_client_server.lib.external import ntplib  # type: ignore
 
 
-CRITICAL_DIFFERENCE_TIME_MS = 200
+CRITICAL_DIFFERENCE_TIME_MS = 400
 
 
 def get_ntp_response(server: str) -> Any:
