@@ -39,6 +39,8 @@ from ptd_client_server.lib import common
 from ptd_client_server.lib import summary as summarylib
 from ptd_client_server.lib import time_sync
 
+PTD_READ_ALL_COMMAND_AC = "RL"
+PTD_READ_ALL_COMMAND_DC = "DC-RL"
 
 RE_PTD_LOG = re.compile(
     r"""^
@@ -473,11 +475,13 @@ class Ptd:
 
     def grab_power_data(self) -> Tuple[int, str, Optional[str], Optional[str]]:
         # (DM) Created method that will utilize SPEC's (only) preferred way of PTD usage and data gathering
-        power_data_header = self.cmd("RL")  # RL - command to show unread samples
+        power_data_header = self.cmd(PTD_READ_ALL_COMMAND_AC)  # RL - command to show unread samples
+        if "Unknown command" in power_data_header:
+            power_data_header = self.cmd(PTD_READ_ALL_COMMAND_DC)  # DC-RL - command to show unread samples in case of DC meter
         if power_data_header is not None:
             number_of_samples = int(
                 power_data_header.split(" ")[1]
-            )  # first line of response will have message: "Last XYZ samples"
+            )  # first line of response will have message: "Last XYZ samples". in case of multich, it will hold inaccurate channel numbers, think how to get real stuff later
         else:
             number_of_samples = 0
         grabbed_power_data = self.read(number_of_samples)
