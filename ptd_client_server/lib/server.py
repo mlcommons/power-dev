@@ -965,18 +965,14 @@ class Session:
                 line_fixed = ""
                 for jj in range(len(temp)):
                     line_fixed += temp[jj]
-                    if jj> 0 and jj<len(temp)-1:
+                    if jj > 0 and jj < len(temp)-1:
                         if jj == 1:
-                            line_fixed += "Mark,"+ self._id + "_ranging,"
-                        line_fixed += "Ch"+str(jj)+","
-                    if jj<len(temp)-1:
+                            line_fixed += "Mark," + self._id + "_ranging,"
+                        line_fixed += "Ch"+str(jj) + ","
+                    if jj < len(temp)-1:
                         line_fixed += "Watts"
-                formatted_log_data += line_fixed+"\n"
+                formatted_log_data += line_fixed + "\n"
 
-            # OLD:
-            # formatted_log_data = log_data.replace(
-            #     "\n", str(",Mark," + self._id + "_ranging\n")
-            # )  # honoring format of legacy spl.txt
             assert self._go_command_time is not None
             test_duration = time.monotonic() - self._go_command_time
             dirname = os.path.join(self.log_dir_path, "ranging")
