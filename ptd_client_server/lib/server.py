@@ -965,11 +965,11 @@ class Session:
                 line_fixed = ""
                 for jj in range(len(temp)):
                     line_fixed += temp[jj]
-                    if jj > 0 and jj < len(temp)-1:
+                    if jj > 0 and jj < len(temp) - 1:
                         if jj == 1:
                             line_fixed += "Mark," + self._id + "_ranging,"
-                        line_fixed += "Ch"+str(jj) + ","
-                    if jj < len(temp)-1:
+                        line_fixed += "Ch" + str(jj) + ","
+                    if jj < len(temp) - 1:
                         line_fixed += "Watts"
                 formatted_log_data += line_fixed + "\n"
 
