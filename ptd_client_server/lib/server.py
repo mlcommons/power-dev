@@ -484,7 +484,9 @@ class Ptd:
                 power_data_header = self.cmd(
                     PTD_READ_ALL_COMMAND_AC
                 )  # RL - command to show unread samples in case of singlechannel AC
-            elif power_data_header is not None and re.search("Unknown command", power_data_header):
+            elif power_data_header is not None and re.search(
+                "Unknown command", power_data_header
+            ):
                 power_data_header = self.cmd(
                     PTD_READ_ALL_COMMAND_DC
                 )  # DC-RL - command to show unread samples in case of DC meter
