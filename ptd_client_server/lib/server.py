@@ -965,10 +965,15 @@ class Session:
                 line_fixed = ""
                 for jj in range(len(temp)):
                     line_fixed += temp[jj]
-                    if jj > 0 and jj < len(temp) - 1:
+                    if jj > 0 and (jj < len(temp) - 1 or len(temp) == 2):
                         if jj == 1:
-                            line_fixed += "Mark," + self._id + "_ranging,"
-                        line_fixed += "Ch" + str(jj) + ","
+                            if len(temp) == 2:
+                                line_fixed += ","
+                            line_fixed += "Mark," + self._id + "_ranging"
+                            if len(temp) > 2:
+                                line_fixed += ","
+                        if len(temp) > 2:
+                            line_fixed += "Ch" + str(jj) + ","
                     if jj < len(temp) - 1:
                         line_fixed += "Watts"
                 formatted_log_data += line_fixed + "\n"
@@ -1034,10 +1039,26 @@ class Session:
             dirname = os.path.join(self.log_dir_path, "run_1")
             os.mkdir(dirname)
             samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
-            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
-            formatted_log_data = log_data.replace(
-                "\n", str(",Mark," + self._id + "_testing\n")
-            )  # honoring format of legacy spl.txt
+            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)lines = log_data.split("\n")
+            lines = log_data.split("\n")
+            formatted_log_data = ""
+            for ii in range(len(lines)):
+                temp = lines[ii].split("Watts")
+                line_fixed = ""
+                for jj in range(len(temp)):
+                    line_fixed += temp[jj]
+                    if jj > 0 and (jj < len(temp) - 1 or len(temp) == 2):
+                        if jj == 1:
+                            if len(temp) == 2:
+                                line_fixed += ","
+                            line_fixed += "Mark," + self._id + "_testing"
+                            if len(temp) > 2:
+                                line_fixed += ","
+                        if len(temp) > 2:
+                            line_fixed += "Ch" + str(jj) + ","
+                    if jj < len(temp) - 1:
+                        line_fixed += "Watts"
+                formatted_log_data += line_fixed + "\n"
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
                 f.write(formatted_log_data)
             with open(os.path.join(dirname, "ptd_out.txt"), "w") as f:
