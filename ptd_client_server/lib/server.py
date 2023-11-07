@@ -39,6 +39,9 @@ from ptd_client_server.lib import common
 from ptd_client_server.lib import summary as summarylib
 from ptd_client_server.lib import time_sync
 
+PTD_READ_ALL_COMMAND_AC_MULTICH = "RL,*,*"
+PTD_READ_ALL_COMMAND_AC = "RL"
+PTD_READ_ALL_COMMAND_DC = "DC-RL"
 
 RE_PTD_LOG = re.compile(
     r"""^
@@ -63,6 +66,8 @@ MULTICHANNEL_DEVICES = [48, 59, 61, 77]
 # https://github.com/mlcommons/power-dev/issues/220#issue-835336923
 DEVICE_TYPE_WT500 = 48
 
+DC_DEVICES = [508, 549, 586]
+
 MAX_RANGE_FOR_DEVICE = {
     8: 20,  # WT210
     49: 20,  # WT310
@@ -72,6 +77,9 @@ MAX_RANGE_FOR_DEVICE = {
     48: 40,  # WT500_multichannel
     47: 50,  # WT1800
     66: 30,  # WT5000
+    508: 20,  # WT210 DC
+    549: 20,  # WT310 DC
+    586: 20,  # WT330 DC
 }
 
 
@@ -296,11 +304,13 @@ class ServerConfig:
             "ptd", "channel", parse=parse_channel, fallback=None
         )
         self.ptd_device_type: int = get("ptd", "deviceType", parse=int)
+        ptd_dc_flag: Optional[str] = get("ptd", "dcFlag", fallback=None)
         ptd_interface_flag: str = get("ptd", "interfaceFlag")
         ptd_device_port: str = get("ptd", "devicePort")
         ptd_board_num: Optional[int] = get("ptd", "gpibBoard", parse=int, fallback=None)
         # TODO: validate ptd_interface_flag?
         # TODO: validate ptd_device_type?
+        # we can have a list of supported/tested devices and throw a warning when new device is used?
         self.ptd_logfile: str = os.path.join(self.tmp_dir.name, "ptd_logfile.txt")
         self.ptd_port: int = get("ptd", "networkPort", parse=int, fallback="8888")
         self.ptd_command: List[str] = [
@@ -315,6 +325,7 @@ class ServerConfig:
                 if self.ptd_channel is None
                 else ["-c", ",".join(str(x) for x in self.ptd_channel)]
             ),
+            *([] if ptd_dc_flag is None else [ptd_dc_flag]),
             *([] if ptd_interface_flag == "" else [ptd_interface_flag]),
             str(self.ptd_device_type),
             ptd_device_port,
@@ -324,6 +335,7 @@ class ServerConfig:
             "command": self.ptd_command,
             "device_type": self.ptd_device_type,
             "interface_flag": ptd_interface_flag,
+            "dc_flag": ptd_dc_flag,
             "device_port": ptd_device_port,
             "channel": self.ptd_channel,
         }
@@ -464,11 +476,24 @@ class Ptd:
 
     def grab_power_data(self) -> Tuple[int, str, Optional[str], Optional[str]]:
         # (DM) Created method that will utilize SPEC's (only) preferred way of PTD usage and data gathering
-        power_data_header = self.cmd("RL")  # RL - command to show unread samples
+        power_data_header = self.cmd(
+            PTD_READ_ALL_COMMAND_AC_MULTICH
+        )  # RL,*,* - command to show unread samples from sum channel and all channels individually
         if power_data_header is not None:
-            number_of_samples = int(
-                power_data_header.split(" ")[1]
-            )  # first line of response will have message: "Last XYZ samples"
+            if re.search("Invalid number of parameters", power_data_header):
+                power_data_header = self.cmd(
+                    PTD_READ_ALL_COMMAND_AC
+                )  # RL - command to show unread samples in case of singlechannel AC
+            elif power_data_header is not None and re.search(
+                "Unknown command", power_data_header
+            ):
+                power_data_header = self.cmd(
+                    PTD_READ_ALL_COMMAND_DC
+                )  # DC-RL - command to show unread samples in case of DC meter
+            if power_data_header is not None:
+                number_of_samples = int(
+                    power_data_header.split(" ")[1]
+                )  # first line of response will have message: "Last XYZ samples".
         else:
             number_of_samples = 0
         grabbed_power_data = self.read(number_of_samples)
@@ -931,10 +956,28 @@ class Session:
             self._state = SessionState.RANGING_DONE
             self._ptd.stop()
             samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
-            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
-            formatted_log_data = log_data.replace(
-                "\n", str(",Mark," + self._id + "_ranging\n")
-            )  # honoring format of legacy spl.txt
+            # (DM) really ugly function that will parse telnet log and reformat it in log that is same as ptd.log
+            # If anyone knows how to do it better, please do
+            lines = log_data.split("\n")
+            formatted_log_data = ""
+            for ii in range(len(lines)):
+                temp = lines[ii].split("Watts")
+                line_fixed = ""
+                for jj in range(len(temp)):
+                    line_fixed += temp[jj]
+                    if jj > 0 and (jj < len(temp) - 1 or len(temp) == 2):
+                        if jj == 1:
+                            if len(temp) == 2:
+                                line_fixed += ","
+                            line_fixed += "Mark," + self._id + "_ranging"
+                            if len(temp) > 2:
+                                line_fixed += ","
+                        if len(temp) > 2:
+                            line_fixed += "Ch" + str(jj) + ","
+                    if jj < len(temp) - 1:
+                        line_fixed += "Watts"
+                formatted_log_data += line_fixed + "\n"
+
             assert self._go_command_time is not None
             test_duration = time.monotonic() - self._go_command_time
             dirname = os.path.join(self.log_dir_path, "ranging")
@@ -1001,10 +1044,26 @@ class Session:
             dirname = os.path.join(self.log_dir_path, "run_1")
             os.mkdir(dirname)
             samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
-            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
-            formatted_log_data = log_data.replace(
-                "\n", str(",Mark," + self._id + "_testing\n")
-            )  # honoring format of legacy spl.txt
+            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)lines = log_data.split("\n")
+            lines = log_data.split("\n")
+            formatted_log_data = ""
+            for ii in range(len(lines)):
+                temp = lines[ii].split("Watts")
+                line_fixed = ""
+                for jj in range(len(temp)):
+                    line_fixed += temp[jj]
+                    if jj > 0 and (jj < len(temp) - 1 or len(temp) == 2):
+                        if jj == 1:
+                            if len(temp) == 2:
+                                line_fixed += ","
+                            line_fixed += "Mark," + self._id + "_testing"
+                            if len(temp) > 2:
+                                line_fixed += ","
+                        if len(temp) > 2:
+                            line_fixed += "Ch" + str(jj) + ","
+                    if jj < len(temp) - 1:
+                        line_fixed += "Watts"
+                formatted_log_data += line_fixed + "\n"
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
                 f.write(formatted_log_data)
             with open(os.path.join(dirname, "ptd_out.txt"), "w") as f:
