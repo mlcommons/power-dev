@@ -39,6 +39,7 @@ from ptd_client_server.lib import common
 from ptd_client_server.lib import summary as summarylib
 from ptd_client_server.lib import time_sync
 
+PTD_READ_ALL_COMMAND_AC_MULTICH = "RL,*,*"
 PTD_READ_ALL_COMMAND_AC = "RL"
 PTD_READ_ALL_COMMAND_DC = "DC-RL"
 
@@ -478,10 +479,16 @@ class Ptd:
     def grab_power_data(self) -> Tuple[int, str, Optional[str], Optional[str]]:
         # (DM) Created method that will utilize SPEC's (only) preferred way of PTD usage and data gathering
         power_data_header = self.cmd(
-            PTD_READ_ALL_COMMAND_AC
-        )  # RL - command to show unread samples
+            PTD_READ_ALL_COMMAND_AC_MULTICH
+        )  # RL,*,* - command to show unread samples from sum channel and all channels individually
         if power_data_header is not None:
-            if re.search("Unknown command", power_data_header):
+            if re.search("Invalid number of parameters", power_data_header):
+                power_data_header = self.cmd(
+                    PTD_READ_ALL_COMMAND_AC
+                )  # RL - command to show unread samples in case of singlechannel AC
+            elif power_data_header is not None and re.search(
+                "Unknown command", power_data_header
+            ):
                 power_data_header = self.cmd(
                     PTD_READ_ALL_COMMAND_DC
                 )  # DC-RL - command to show unread samples in case of DC meter
@@ -951,10 +958,28 @@ class Session:
             self._state = SessionState.RANGING_DONE
             self._ptd.stop()
             samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
-            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
-            formatted_log_data = log_data.replace(
-                "\n", str(",Mark," + self._id + "_ranging\n")
-            )  # honoring format of legacy spl.txt
+            # (DM) really ugly function that will parse telnet log and reformat it in log that is same as ptd.log
+            # If anyone knows how to do it better, please do
+            lines = log_data.split("\n")
+            formatted_log_data = ""
+            for ii in range(len(lines)):
+                temp = lines[ii].split("Watts")
+                line_fixed = ""
+                for jj in range(len(temp)):
+                    line_fixed += temp[jj]
+                    if jj > 0 and (jj < len(temp) - 1 or len(temp) == 2):
+                        if jj == 1:
+                            if len(temp) == 2:
+                                line_fixed += ","
+                            line_fixed += "Mark," + self._id + "_ranging"
+                            if len(temp) > 2:
+                                line_fixed += ","
+                        if len(temp) > 2:
+                            line_fixed += "Ch" + str(jj) + ","
+                    if jj < len(temp) - 1:
+                        line_fixed += "Watts"
+                formatted_log_data += line_fixed + "\n"
+
             assert self._go_command_time is not None
             test_duration = time.monotonic() - self._go_command_time
             dirname = os.path.join(self.log_dir_path, "ranging")
@@ -1016,10 +1041,26 @@ class Session:
             dirname = os.path.join(self.log_dir_path, "run_1")
             os.mkdir(dirname)
             samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
-            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)
-            formatted_log_data = log_data.replace(
-                "\n", str(",Mark," + self._id + "_testing\n")
-            )  # honoring format of legacy spl.txt
+            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)lines = log_data.split("\n")
+            lines = log_data.split("\n")
+            formatted_log_data = ""
+            for ii in range(len(lines)):
+                temp = lines[ii].split("Watts")
+                line_fixed = ""
+                for jj in range(len(temp)):
+                    line_fixed += temp[jj]
+                    if jj > 0 and (jj < len(temp) - 1 or len(temp) == 2):
+                        if jj == 1:
+                            if len(temp) == 2:
+                                line_fixed += ","
+                            line_fixed += "Mark," + self._id + "_testing"
+                            if len(temp) > 2:
+                                line_fixed += ","
+                        if len(temp) > 2:
+                            line_fixed += "Ch" + str(jj) + ","
+                    if jj < len(temp) - 1:
+                        line_fixed += "Watts"
+                formatted_log_data += line_fixed + "\n"
             with open(os.path.join(dirname, "spl.txt"), "w") as f:
                 f.write(formatted_log_data)
             with open(os.path.join(dirname, "ptd_out.txt"), "w") as f:
