@@ -657,12 +657,12 @@ def check_ptd_logs(
             continue
         if (not start_ranging_time) and (start_ranging_line == msg):
             start_ranging_time = get_time_from_line(
-                line, date_regexp, file_path, 0 # timezone_offset
+                line, date_regexp, file_path, 0  # timezone_offset
             )
         if (not stop_ranging_time) and bool(start_ranging_time):
             if ": Completed test" == msg:
                 stop_ranging_time = get_time_from_line(
-                    line, date_regexp, file_path, 0 # timezone_offset
+                    line, date_regexp, file_path, 0  # timezone_offset
                 )
                 break
 
@@ -677,7 +677,7 @@ def check_ptd_logs(
             try:
                 log_time = None
                 log_time = get_time_from_line(
-                    line, date_regexp, file_path, 0 # timezone_offset
+                    line, date_regexp, file_path, 0  # timezone_offset
                 )
             except LineWithoutTimeStamp:
                 assert (
