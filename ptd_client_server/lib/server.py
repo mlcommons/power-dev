@@ -304,7 +304,9 @@ class ServerConfig:
             "ptd", "channel", parse=parse_channel, fallback=None
         )
         self.ptd_device_type: int = get("ptd", "deviceType", parse=int)
-        ptd_dc_flag: Optional[str] = get("ptd", "dcFlag", fallback=None)
+        ptd_dc_flag: Optional[str] = None
+        if self.ptd_device_type in DC_DEVICES:
+            ptd_dc_flag = str("-D")
         ptd_interface_flag: str = get("ptd", "interfaceFlag")
         ptd_device_port: str = get("ptd", "devicePort")
         ptd_board_num: Optional[int] = get("ptd", "gpibBoard", parse=int, fallback=None)
@@ -335,7 +337,6 @@ class ServerConfig:
             "command": self.ptd_command,
             "device_type": self.ptd_device_type,
             "interface_flag": ptd_interface_flag,
-            "dc_flag": ptd_dc_flag,
             "device_port": ptd_device_port,
             "channel": self.ptd_channel,
         }
