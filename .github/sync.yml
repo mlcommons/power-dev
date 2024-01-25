@@ -4,3 +4,5 @@ group:
   files:
     - source: compliance/check.py
       dest: tools/submission/power/power_checker.py
+    - source: compliance/sources_checksums.json
+      dest: tools/submission/power/sources_checksums.json
