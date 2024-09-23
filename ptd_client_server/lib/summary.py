@@ -1,3 +1,4 @@
+# Edited by Pawan Ambalkar 9/23/2024
 # Copyright 2018 The MLPerf Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,7 +48,7 @@ class Summary:
             "testing": [],
         }
         self.debug = False
-        self.ptd_config: Optional[Dict[str, Any]] = None
+        self.ptd_config: List[Optional[Dict[str, Any]]] = [None]
 
         # TODO: move source_hashes into this module
         source_hashes_: Any = source_hashes.get()
@@ -115,6 +116,9 @@ class PtdMessages:
 
     def add(self, cmd: str, reply: str) -> None:
         self._m.append({"cmd": cmd, "reply": reply})
+
+    def merge(self, other: "PtdMessages") -> None:
+        self._m.extend(other._m)  
 
     def to_json(self) -> Any:
         return self._m

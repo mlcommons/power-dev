@@ -1,3 +1,4 @@
+# Edited by Pawan Ambalkar - 9/23/2024
 # Copyright 2018 The MLPerf Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -97,6 +98,62 @@ class LitNotFoundError(Exception):
 
 class ExtraChannelError(Exception):
     pass
+
+# (PVA added MG) new function to merge power logs from multiple analyzers
+def merge_power_logs(inputfiles: List[str], outputfile: str) -> None:
+    # buffer contains a list for each analyzer
+    input_data: List[List[List[str]]] = []  # List[analyzer_num][line_num][column_num]
+    for analyzer_num in range(len(inputfiles)):
+        with open(inputfiles[analyzer_num]) as f_in:
+            input_data.append([])  # add a new buffer for this analyzer
+            for line in f_in:
+                input_data[analyzer_num].append(
+                    list(line.rstrip().split(","))
+                )  # add line to analyzer's buffer
+    print(f"This is the length of input data: {len(input_data)}")
+    with open(outputfile, "w") as f_out:
+        # go line by line and combine
+        for line_num in range(min([len(analyzer) for analyzer in input_data])):
+            aggregate = [
+                "Time",
+                "None",
+                "Watts",
+                "None",
+                "Volts",
+                "None",
+                "Amps",
+                "None",
+                "PF",
+                "none",
+                "Mark",
+                "None",
+            ]
+            
+            #(PVA added try except as sometimes the logs may have extra data point creating a mistach in index of analyzer 1)
+            try:
+                # borrowing time and mark from analyzer 1
+                aggregate[1] = input_data[0][line_num][1]  # time
+                aggregate[11] = input_data[0][line_num][11]  # mark
+
+                combined_watts: float = 0.0
+                for analyzer_num in range(len(input_data)):
+                    # (MG) only add if the value is not -1 (i.e. if the analyzer was on)
+                    if float(input_data[analyzer_num][line_num][3]) != -1:
+                        # (MG) watts is absolute value in case the analyzer was mistakenly on the negative side
+                        combined_watts += abs(float(input_data[analyzer_num][line_num][3]))
+                # "Time", time, "Watts", watts1+watts2+...+watts(n), "Volts", volts, "Amps", amps, "PF", pf
+                aggregate[3] = f"{combined_watts:.6f}"
+                aggregate[5] = f"{-1:.6f}"  # volts
+                aggregate[7] = f"{-1:.6f}"  # amps
+                aggregate[9] = f"{-1:.6f}"  # pf
+                f_out.write(",".join(aggregate))
+                
+                for analyzer_num in range(len(input_data)):
+                    f_out.write(f",Analyzer{analyzer_num+1},")
+                    f_out.write(",".join(input_data[analyzer_num][line_num]))
+                f_out.write("\n")
+            except:
+                print("Mismatch of total number of lines between Analyzer logs, skipping line number {line_num} from the log.")
 
 
 class Parser:
@@ -300,45 +357,67 @@ class ServerConfig:
         )
         self.ranging_mode = get("server", "rangingMode", fallback="AUTO")
 
-        self.ptd_channel: Optional[List[int]] = get(
-            "ptd", "channel", parse=parse_channel, fallback=None
-        )
-        self.ptd_device_type: int = get("ptd", "deviceType", parse=int)
-        ptd_dc_flag: Optional[str] = get("ptd", "dcFlag", fallback=None)
-        ptd_interface_flag: str = get("ptd", "interfaceFlag")
-        ptd_device_port: str = get("ptd", "devicePort")
-        ptd_board_num: Optional[int] = get("ptd", "gpibBoard", parse=int, fallback=None)
-        # TODO: validate ptd_interface_flag?
-        # TODO: validate ptd_device_type?
-        # we can have a list of supported/tested devices and throw a warning when new device is used?
-        self.ptd_logfile: str = os.path.join(self.tmp_dir.name, "ptd_logfile.txt")
-        self.ptd_port: int = get("ptd", "networkPort", parse=int, fallback="8888")
-        self.ptd_command: List[str] = [
-            get("ptd", "ptd"),
-            "-l",
-            self.ptd_logfile,
-            "-p",
-            str(self.ptd_port),
-            *([] if ptd_board_num is None else ["-b", str(ptd_board_num)]),
-            *(
-                []
-                if self.ptd_channel is None
-                else ["-c", ",".join(str(x) for x in self.ptd_channel)]
-            ),
-            *([] if ptd_dc_flag is None else [ptd_dc_flag]),
-            *([] if ptd_interface_flag == "" else [ptd_interface_flag]),
-            str(self.ptd_device_type),
-            ptd_device_port,
-        ]
+        self.analyzer_count: int = get("ptd", "analyzerCount", parse=int, fallback="1")
 
-        self.ptd_summary: Dict[str, Any] = {
-            "command": self.ptd_command,
-            "device_type": self.ptd_device_type,
-            "interface_flag": ptd_interface_flag,
-            "dc_flag": ptd_dc_flag,
-            "device_port": ptd_device_port,
-            "channel": self.ptd_channel,
-        }
+        #(PVA)Define the variables.
+        self.ptd_channel: List[List[int]] = [[]] * self.analyzer_count
+        self.ptd_port: List[int] = [0] * self.analyzer_count
+        self.ptd_device_type: List[int] = [0] * self.analyzer_count
+        self.ptd_interface_flag: List[str] = [""] * self.analyzer_count
+        self.ptd_dc_flag: List[str] = [""] * self.analyzer_count
+        self.ptd_device_port: List[str] = [""] * self.analyzer_count
+        self.ptd_board_num: List[Optional[int]] = [None] * self.analyzer_count
+        self.ptd_logfile: List[str] = [""] * self.analyzer_count
+        self.ptd_command: List[List[str]] = [[]] * self.analyzer_count
+        self.ptd_summary: List[Dict[str, Any]] = [{}] * self.analyzer_count
+
+        for i in range(self.analyzer_count):
+            self.ptd_channel[i] = get(
+                f"analyzer{i+1}", "channel", parse=parse_channel, fallback=None
+            )
+            self.ptd_port[i] = get(f"analyzer{i+1}", "networkPort", parse=int, fallback="8888")
+            # TODO: validate ptd_device_type?
+            self.ptd_device_type[i] = get(f"analyzer{i+1}", "deviceType", parse=int)
+            #(PVA)DC flag is new so changed to other formats
+            self.ptd_dc_flag[i] = get(f"analyzer{i+1}", "dcFlag", fallback=None)
+            # TODO: validate ptd_interface_flag?
+            self.ptd_interface_flag[i] = get(f"analyzer{i+1}", "interfaceFlag")
+            self.ptd_device_port[i] = get(f"analyzer{i+1}", "devicePort")
+            self.ptd_board_num[i] = get(
+                f"analyzer{i+1}", "gpibBoard", parse=int, fallback=None
+            )
+
+            #(PVA) the self.tmp_dir.name is not changed to self.out_dir
+            # we can have a list of supported/tested devices and throw a warning when new device is used?
+            self.ptd_logfile[i] = os.path.join(self.tmp_dir.name, f"ptd_logfile_{i+1}.log")
+            
+            self.ptd_command[i] = [
+                get("ptd", "ptd"),
+                "-l",
+                self.ptd_logfile[i],
+                "-p",
+                str(self.ptd_port[i]),
+                
+                *([] if self.ptd_board_num[i] is None else ["-b", str(self.ptd_board_num[i])]),
+                *(
+                    []
+                    if self.ptd_channel[i] is None
+                    else ["-c", ",".join(str(x) for x in self.ptd_channel[i])]
+                ),
+                *([] if self.ptd_dc_flag[i] is None else [self.ptd_dc_flag[i]]),
+                *([] if self.ptd_interface_flag[i] == "" else [self.ptd_interface_flag[i]]),
+                str(self.ptd_device_type[i]),
+                self.ptd_device_port[i],
+            ]
+
+            self.ptd_summary[i] = {
+                "command": self.ptd_command[i],
+                "device_type": self.ptd_device_type[i],
+                "interface_flag": self.ptd_interface_flag[i],
+                "dc_flag": self.ptd_dc_flag[i],
+                "device_port": self.ptd_device_port[i],
+                "channel": self.ptd_channel[i],
+            }
 
         for section, used_items in used.items():
             unused_options = conf[section].keys() - set((i.lower() for i in used_items))
@@ -358,41 +437,45 @@ class ServerConfig:
         self._check(filename)
 
     def _check(self, filename: str) -> None:
-        if tcp_port_is_occupied(self.ptd_port):
-            exit_with_error_msg(
-                f"The PTDaemon port {self.ptd_port} is already occupied."
-            )
+        for i in range(self.analyzer_count):
+            if tcp_port_is_occupied(self.ptd_port[i]):
+                exit_with_error_msg(
+                    f"The PTDaemon port {self.ptd_port[i]} is already occupied."
+                )
 
-        if self.ptd_device_type in MULTICHANNEL_DEVICES:
-            if not self.ptd_channel:
-                exit_with_error_msg(
-                    f"{filename}: 'channel' value should be set for"
-                    f" a multichannel device {self.ptd_device_type}."
-                )
-            if self.ptd_device_type == DEVICE_TYPE_WT500 and len(self.ptd_channel) != 1:
-                exit_with_error_msg(
-                    f"{filename}: 'channel' value should consist of one number"
-                    f" for a multichannel device {self.ptd_device_type} (Yokogawa WT500)."
-                )
-            if self.ptd_device_type != DEVICE_TYPE_WT500 and len(self.ptd_channel) != 2:
-                exit_with_error_msg(
-                    f"{filename}: 'channel' value should consist of two numbers"
-                    f" for a multichannel device {self.ptd_device_type}."
-                )
-        else:
-            if self.ptd_channel and len(self.ptd_channel) != 1:
-                exit_with_error_msg(
-                    f"{filename}: 'channel' value should consist of one number"
-                    f" or be disabled for a 1-channel device {self.ptd_device_type}."
-                )
+            if self.ptd_device_type[i] in MULTICHANNEL_DEVICES:
+                if not self.ptd_channel[i]:
+                    exit_with_error_msg(
+                        f"{filename}: 'channel' value should be set for"
+                        f" a multichannel device {self.ptd_device_type[i]}."
+                    )
+                if self.ptd_device_type[i] == DEVICE_TYPE_WT500 and len(self.ptd_channel[i]) != 1:
+                    exit_with_error_msg(
+                        f"{filename}: 'channel' value should consist of one number"
+                        f" for a multichannel device {self.ptd_device_type[i]} (Yokogawa WT500)."
+                    )
+                if self.ptd_device_type[i] != DEVICE_TYPE_WT500 and len(self.ptd_channel[i]) != 2:
+                    exit_with_error_msg(
+                        f"{filename}: 'channel' value should consist of two numbers"
+                        f" for a multichannel device {self.ptd_device_type[i]}."
+                    )
+            else:
+                if self.ptd_channel[i] and len(self.ptd_channel[i]) != 1:
+                    exit_with_error_msg(
+                        f"{filename}: 'channel' value should consist of one number"
+                        f" or be disabled for a 1-channel device {self.ptd_device_type[i]}."
+                    )
 
 
 class Ptd:
-    def __init__(self, command: List[str], port: int, log_dir_path: str) -> None:
+    def __init__(
+        self, command: List[str], port: int, log_dir_path: str, analyzer: int
+    ) -> None:
         self._process: Optional[subprocess.Popen[Any]] = None
         self._socket: Optional[socket.socket] = None
         self._proto: Optional[common.Proto] = None
         self._command = command
+        self._analyzer = analyzer
         self._port = port
         self._init_Amps: Optional[str] = None
         self._init_Volts: Optional[str] = None
@@ -412,10 +495,15 @@ class Ptd:
         if self._process is not None:
             return
         if tcp_port_is_occupied(self._port):
-            raise RuntimeError(f"The PTDaemon port {self._port} is already occupied")
-        logging.info(f"Running PTDaemon: {self._command}")
-
-        self._tee = Tee(os.path.join(self._log_dir_path, "ptd_logs.txt"))
+            raise RuntimeError(
+                f"Analyzer [{self._analyzer}] says the PTDaemon port {self._port} is already occupied"
+            )
+        logging.info(
+            f"Analyzer [{self._analyzer}] is running PTDaemon: {self._command}"
+        )
+        self._tee = Tee(
+            os.path.join(self._log_dir_path, f"ptd_logs_analyzer_{self._analyzer}.txt")
+        )
         env = os.environ
         env["TZ"] = "UTC"
         if sys.platform == "win32":
@@ -449,7 +537,10 @@ class Ptd:
         s = None
         while s is None and retries > 0:
             if self._process is not None and self._process.poll() is not None:
-                raise RuntimeError("PTDaemon unexpectedly terminated")
+                raise RuntimeError(
+                    f"Analyzer [{self._analyzer}] says PTDaemon unexpectedly terminated"
+                )
+                #raise RuntimeError("PTDaemon unexpectedly terminated")
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 s.connect(("127.0.0.1", self._port))
@@ -461,16 +552,18 @@ class Ptd:
                 retries -= 1
         if s is None:
             self.terminate()
-            raise RuntimeError("Could not connect to PTDaemon")
+            raise RuntimeError(
+                f"Analyzer [{self._analyzer}] could not connect to PTDaemon"
+            )
         self._socket = s
         self._proto = common.Proto(s)
 
         if self.cmd("Hello") != "Hello, PTDaemon here!":
-            raise RuntimeError("This is not PTDaemon")
+            raise RuntimeError(f"Analyzer [{self._analyzer}] says this is not PTDaemon")
 
         self.cmd("Identify")  # reply traced in logs
 
-        logging.info("Connected to PTDaemon")
+        logging.info(f"Analyzer [{self._analyzer}] connected to PTDaemon")
 
         self._get_initial_range()
 
@@ -516,7 +609,7 @@ class Ptd:
             self.cmd(f"SR,V,{self._init_Volts}")
             self.cmd(f"SR,A,{self._init_Amps}")
             logging.info(
-                f"Set initial values for Amps {self._init_Amps} and Volts {self._init_Volts}"
+                f"Analyzer [{self._analyzer}] set initial values for Amps {self._init_Amps} and Volts {self._init_Volts}"
             )
             self._proto = None
 
@@ -525,7 +618,7 @@ class Ptd:
             self._socket = None
 
         if self._process is not None:
-            logging.info("Stopping ptd...")
+            logging.info(f"Analyzer [{self._analyzer}] stopping ptd...")
             self._process.terminate()
             try:
                 self._process.wait(timeout=10)
@@ -540,7 +633,7 @@ class Ptd:
 
     def _force_terminate(self) -> None:
         if self._process is not None:
-            logging.info("Force stopping ptd...")
+            logging.info(f"Analyzer [{self._analyzer}] force stopping ptd...")
             self._process.kill()
             self._process.wait()
         self._process = None
@@ -553,13 +646,13 @@ class Ptd:
         if self._proto is None:
             return None
         if self._process is None or self._process.poll() is not None:
-            exit_with_error_msg("PTDaemon unexpectedly terminated")
-        logging.info(f"Sending to ptd: {cmd!r}")
+            exit_with_error_msg(f"Analyzer [{self._analyzer}] says PTDaemon unexpectedly terminated")
+        logging.info(f"Analyzer [{self._analyzer}] is sending to ptd: {cmd!r}")
         self._proto.send(cmd)
         reply = self._proto.recv()
         if reply is None:
-            exit_with_error_msg("Got no reply from PTDaemon")
-        logging.info(f"Reply from ptd: {reply!r}")
+            exit_with_error_msg(f"Analyzer [{self._analyzer}] got no reply from PTDaemon :(")
+        logging.info(f"Analyzer [{self._analyzer}] recieved reply from ptd: {reply!r}")
         self._messages.add(cmd, reply)
         return reply
 
@@ -570,7 +663,7 @@ class Ptd:
             return None
         if self._process is None or self._process.poll() is not None:
             exit_with_error_msg("PTDaemon unexpectedly terminated")
-        logging.info(f"Trying to read {number!r} lines")
+        logging.info(f"Analyzer [{self._analyzer}] is trying to read {number!r} lines")
         while number:
             rcvd = self._proto.recv()
             if rcvd is not None:
@@ -581,7 +674,7 @@ class Ptd:
             number -= 1
         if reply is None:
             exit_with_error_msg("Got no reply from PTDaemon")
-        logging.info(f"Reply from ptd: {reply!r}")
+        logging.info(f"Analyzer [{self._analyzer}] got reply from ptd: {reply!r}")
         return reply
 
     def _get_initial_range(self) -> None:
@@ -590,7 +683,7 @@ class Ptd:
         # For range values, -1.0 indicates ?unknown?, >0 indicates actual value
         response = self.cmd("RR")
         if response is None or response == "":
-            logging.error("Can not get initial range")
+            logging.error(f"Analyzer [{self._analyzer}] can't not get initial range")
             exit(1)
 
         response_list = response.split(",")
@@ -603,14 +696,16 @@ class Ptd:
                 ):
                     return response_list[param_num + 1]
             except (ValueError, IndexError):
-                logging.warning(f"Can not get ptd range value for {setting_name}")
+                logging.warning(
+                    f"Analyzer [{self._analyzer}] can not get ptd range value for {setting_name}"
+                )
                 return "Auto"
             return "Auto"
 
         self._init_Amps = get_range_from_ranges_list(1, "Amps")
         self._init_Volts = get_range_from_ranges_list(3, "Volts")
         logging.info(
-            f"Initial range for Amps is {self._init_Amps} for Volts is {self._init_Volts}"
+            f"Analyzer [{self._analyzer}] says the initial range for Amps is {self._init_Amps} for Volts is {self._init_Volts}"
         )
 
 
@@ -627,7 +722,11 @@ class Server:
     def handle_connection(self, p: common.Proto) -> None:
         p.enable_keepalive()
         self._summary = summarylib.Summary()
-        self._summary.ptd_config = self._config.ptd_summary
+        #self._summary.ptd_config = self._config.ptd_summary
+        self._summary.ptd_config = [None] * self._config.analyzer_count
+        for i in range(self._config.analyzer_count):
+            self._summary.ptd_config[i] = self._config.ptd_summary[i]
+
         self._summary.debug = _debug
         self._last_session = self._last_session_dir_path = None
 
@@ -725,8 +824,16 @@ class Server:
             elif cmd[0] == "start" and cmd[1] == "testing" and len(cmd) == 2:
                 return unbool[int(self.session.start(Mode.TESTING))]
             elif cmd[0] == "start" and cmd[1] == "testing" and len(cmd) == 4:
-                self.session._maxVolts = cmd[2]
-                self.session._desirableCurrentRange = cmd[3]
+                # TODO (PVA added MG) can't pass different values to different analyzers
+                for i in range(self._config.analyzer_count):
+                    for i in range(self._config.analyzer_count):
+                        self.session._maxVolts[i] = cmd[2]
+                        self.session._desirableCurrentRange[i] = cmd[3]
+                        logging.info(
+                            f"Analyzer [{i+1}] set initial values for Amps {cmd[3]} and Volts {cmd[2]}"
+                        )
+                #self.session._maxVolts = cmd[2]
+                #self.session._desirableCurrentRange = cmd[3]
                 r = self.session.start(Mode.TESTING)
                 return unbool[int(r)] if type(r) == bool else str(r)
 
@@ -764,7 +871,12 @@ class Server:
 
         power_logs = self.session.power_logs
         log_dir_path = self.session.log_dir_path
-        ptd_messages = self.session._ptd._messages
+        # (PVA added MG) if more than one analyzer, merge ptd messages into one ptd_messages object
+        ptd_messages = self.session._ptd[0]._messages
+        if self._config.analyzer_count > 1:
+            for i in range(1, self._config.analyzer_count):
+                ptd_messages.merge(self.session._ptd[i]._messages)                                                                                 
+        #ptd_messages = self.session._ptd._messages
         session, self.session = self.session, None
         summary, self._summary = self._summary, None
 
@@ -844,16 +956,23 @@ class Session:
         os.mkdir(self.log_dir_path)
         self.power_logs = os.path.join(self._server._config.out_dir, self._id, "power")
         os.mkdir(self.power_logs)
-        self._ptd = Ptd(
-            server._config.ptd_command, server._config.ptd_port, self.power_logs
-        )
-
+        
+        self._ptd: List[Ptd] = [Ptd([""], 0, "", 0)] * server._config.analyzer_count
+        
+        
+        for i in range(server._config.analyzer_count):
+            self._ptd[i] = Ptd(
+                server._config.ptd_command[i], 
+                server._config.ptd_port[i], 
+                self.power_logs,
+                i + 1,
+            )
         # State
         self._state = SessionState.INITIAL
-        self._maxAmps: Optional[str] = None
-        self._maxVolts: Optional[str] = None
-        self._avgWatts: Optional[str] = None
-        self._desirableCurrentRange: Optional[str] = None
+        self._maxAmps: List[str] = ["0"] * server._config.analyzer_count
+        self._maxVolts: List[str] = ["0"] * server._config.analyzer_count
+        self._avgWatts: List[str] = ["0"] * server._config.analyzer_count
+        self._desirableCurrentRange: List[str] = ["0"] * server._config.analyzer_count
 
     def start(self, mode: Mode) -> Union[bool, str]:
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
@@ -865,27 +984,41 @@ class Session:
 
         if mode == Mode.RANGING and self._state == SessionState.INITIAL:
             self._server._summary.phase("ranging", 0)
-            self._ptd.start()
-            self._ptd.cmd("SR,V,Auto")
+            for _ptd in self._ptd:
+                _ptd.start()
+                _ptd.cmd("SR,V,Auto")
             if self._server._config.ranging_mode == "AUTO":
-                self._ptd.cmd("SR,A,Auto")
+                for _ptd in self._ptd:                      
+                    _ptd.cmd("SR,A,Auto")
             elif self._server._config.ranging_mode == "MAX":
-                ptd_device_type = self._server._config.ptd_device_type
-                if ptd_device_type in MAX_RANGE_FOR_DEVICE:
-                    self._ptd.cmd(f"SR,A,{MAX_RANGE_FOR_DEVICE[ptd_device_type]}")
-                else:
-                    logging.warning(
-                        f"Unknown max range type for device {ptd_device_type}, using AUTO"
-                    )
-                    self._ptd.cmd("SR,A,Auto")
+                for i in range(self._server._config.analyzer_count):
+                    ptd_device_type = self._server._config.ptd_device_type[i]
+                    if ptd_device_type in MAX_RANGE_FOR_DEVICE:                       
+                        self._ptd[i].cmd(f"SR,A,{MAX_RANGE_FOR_DEVICE[ptd_device_type]}")   
+                    else:
+                        logging.warning(
+                            f"Unknown max range type for device {ptd_device_type}, using AUTO"
+                        )
+                        self._ptd[i].cmd("SR,A,Auto")
             else:
                 logging.warning("Unknown range mode, using AUTO")
-                self._ptd.cmd("SR,A,Auto")
+            for _ptd in self._ptd:                          
+                _ptd.cmd("SR,A,Auto")
 
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting ranging mode")
-            self._ptd.cmd(f"Go,1000,0,{self._id}_ranging")
+            threads = []
+            #self._ptd.cmd(f"Go,1000,0,{self._id}_ranging")
+            for _ptd in self._ptd:
+                ptd_thread_start = threading.Thread(
+                    target=_ptd.cmd, args=(f"Go,1000,0,{self._id}_ranging",)
+                )
+                threads.append(ptd_thread_start)
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()                                  
             self._go_command_time = time.monotonic()
 
             self._state = SessionState.RANGING
@@ -902,29 +1035,41 @@ class Session:
             or self._state == SessionState.RANGING_DONE
         ):
             self._server._summary.phase("testing", 0)
-            self._ptd.start()
+            for i in range(len(self._ptd)):
+                self._ptd[i].start()
 
-            r = self._ptd.cmd(f"SR,V,{self._maxVolts}")
-            if r and "Error" in r:
-                error = f"Error setting voltage range: {self._maxVolts}"
-                logging.error(error)
-                self.drop()
-                return error
+                r = self._ptd[i].cmd(f"SR,V,{self._maxVolts[i]}")
+                if r and "Error" in r:
+                    error = f"Error setting voltage range: {self._maxVolts}"
+                    logging.error(error)
+                    self.drop()
+                    return error
 
-            r = self._ptd.cmd(f"SR,A,{self._desirableCurrentRange}")
-            if r and "Error" in r:
-                error = f"Error setting current range: {self._desirableCurrentRange}"
-                logging.error(error)
-                self.drop()
-                return error
+                r = self._ptd[i].cmd(f"SR,A,{self._desirableCurrentRange[i]}")
+                if r and "Error" in r:
+                    error = f"Error setting current range: {self._desirableCurrentRange}"
+                    logging.error(error)
+                    self.drop()
+                    return error
 
             with common.sig:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting testing mode")
-            logging.info(
-                f"maxAmps: {self._desirableCurrentRange}, maxVolts: {self._maxVolts}"
-            )
-            self._ptd.cmd(f"Go,1000,0,{self._id}_testing")
+            for i in range(len(self._ptd)):
+                logging.info(    
+                    f"Analyzer [{i+1}] maxAmps: {self._desirableCurrentRange[i]}, maxVolts: {self._maxVolts[i]}"
+                )   
+            #self._ptd.cmd(f"Go,1000,0,{self._id}_testing")
+            threads = []
+            for _ptd in self._ptd:
+                ptd_thread_start = threading.Thread(
+                    target=_ptd.cmd, args=(f"Go,1000,0,{self._id}_testing",)
+                )
+                threads.append(ptd_thread_start)
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
 
             self._state = SessionState.TESTING
 
@@ -954,128 +1099,173 @@ class Session:
 
         if mode == Mode.RANGING and self._state == SessionState.RANGING:
             self._state = SessionState.RANGING_DONE
-            self._ptd.stop()
-            samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
-            # (DM) really ugly function that will parse telnet log and reformat it in log that is same as ptd.log
-            # If anyone knows how to do it better, please do
-            lines = log_data.split("\n")
-            formatted_log_data = ""
-            for ii in range(len(lines)):
-                temp = lines[ii].split("Watts")
-                line_fixed = ""
-                for jj in range(len(temp)):
-                    line_fixed += temp[jj]
-                    if jj > 0 and (jj < len(temp) - 1 or len(temp) == 2):
-                        if jj == 1:
-                            if len(temp) == 2:
-                                line_fixed += ","
-                            line_fixed += "Mark," + self._id + "_ranging"
-                            if len(temp) > 2:
-                                line_fixed += ","
-                        if len(temp) > 2:
-                            line_fixed += "Ch" + str(jj) + ","
-                    if jj < len(temp) - 1:
-                        line_fixed += "Watts"
-                formatted_log_data += line_fixed + "\n"
-
-            assert self._go_command_time is not None
-            test_duration = time.monotonic() - self._go_command_time
             dirname = os.path.join(self.log_dir_path, "ranging")
             os.mkdir(dirname)
-            with open(os.path.join(dirname, "spl.txt"), "w") as f:
-                f.write(formatted_log_data)
-            try:
-                start_channel = 0
-                channels_amount = 0
+            for i in range(self._server._config.analyzer_count):
+                self._ptd[i].stop()
+                samples, log_data, uncertainty_data, sanity = self._ptd[i].grab_power_data()
+                # (DM) really ugly function that will parse telnet log and reformat it in log that is same as ptd.log
+                # If anyone knows how to do it better, please do
+                lines = log_data.split("\n")
+                formatted_log_data = ""
+                for ii in range(len(lines)):
+                    temp = lines[ii].split("Watts")
+                    line_fixed = ""
+                    for jj in range(len(temp)):
+                        line_fixed += temp[jj]
+                        if jj > 0 and (jj < len(temp) - 1 or len(temp) == 2):
+                            if jj == 1:
+                                if len(temp) == 2:
+                                    line_fixed += ","
+                                line_fixed += "Mark," + self._id + "_ranging"
+                                if len(temp) > 2:
+                                    line_fixed += ","
+                            if len(temp) > 2:
+                                line_fixed += "Ch" + str(jj) + ","
+                        if jj < len(temp) - 1:
+                            line_fixed += "Watts"
+                    formatted_log_data += line_fixed + "\n"
 
-                if self._server._config.ptd_channel is not None:
-                    if self._server._config.ptd_device_type == DEVICE_TYPE_WT500:
-                        start_channel = 1
-                        channels_amount = self._server._config.ptd_channel[0]
+                assert self._go_command_time is not None
+                test_duration = time.monotonic() - self._go_command_time
+
+                with open(os.path.join(dirname, f"spl_analyzer_{i+1}.csv"), "w") as f:
+                    f.write(formatted_log_data)
+                try:
+                    start_channel = 0
+                    channels_amount = 0
+
+                    if self._server._config.ptd_channel[i] is not None:
+                        if self._server._config.ptd_device_type[i] == DEVICE_TYPE_WT500:
+                            start_channel = 1
+                            channels_amount = self._server._config.ptd_channel[i][0]
+                        else:
+                            start_channel = self._server._config.ptd_channel[i][0]
+                            if len(self._server._config.ptd_channel[i]) == 2:
+                                channels_amount = self._server._config.ptd_channel[i][1]
+
+                    (
+                        self._maxVolts[i],
+                        self._maxAmps[i],
+                        self._avgWatts[i],
+                    ) = max_volts_amps_avg_watts(
+                        self._server._config.ptd_logfile[i],
+                        self._id + "_ranging",
+                        start_channel,
+                        channels_amount,
+                    )
+
+                    # we will query average power consumed and depending on that, we will add fix to crest factor
+                    # default is crest factor 3 (peak current is 3x rms current)
+                    # PSUs under 75W don't have mandatory Power Factor Correction, so they can be arbitrarily dirty
+                    # Tektronix' app note on power supplies claims that power supplies typically exhibit crest factor between 4 and 10
+                    # https://assets.testequity.com/te1/Documents/pdf/power-measurements_AC-DC-an.pdf
+                    # in order to achieve same peak detection, range should be 3.3 higher than max measured RMS (since crest factor of meter is 3 and 3*3.3 is almost 10 :) )
+
+                    # DM:
+                    # will have to deprecate this (forever), since it will cause increase in uncertainties (up to about 2.5x), so might easily blow over 1%.
+
+                    # if float(self._avgWatts) < 75:
+                    #     self._desirableCurrentRange = str(float(self._maxAmps) * 3.3)
+                    # else:
+                    #     self._desirableCurrentRange = str(float(self._maxAmps) * 1.1)
+
+                    self._desirableCurrentRange[i] = str(float(self._maxAmps[i]) * 1.1)
+
+                except MaxVoltsAmpsNegativeValuesError as e:
+                    if test_duration < 1:
+                        raise MeasurementEndedTooFastError(
+                            f"the ranging measurement ended too fast (less than 1 second), no PTDaemon logs generated for {self._id!r}"
+                        ) from e
                     else:
-                        start_channel = self._server._config.ptd_channel[0]
-                        if len(self._server._config.ptd_channel) == 2:
-                            channels_amount = self._server._config.ptd_channel[1]
-
-                (
-                    self._maxVolts,
-                    self._maxAmps,
-                    self._avgWatts,
-                ) = max_volts_amps_avg_watts(
-                    self._server._config.ptd_logfile,
-                    self._id + "_ranging",
-                    start_channel,
-                    channels_amount,
-                )
-
-                # we will query average power consumed and depending on that, we will add fix to crest factor
-                # default is crest factor 3 (peak current is 3x rms current)
-                # PSUs under 75W don't have mandatory Power Factor Correction, so they can be arbitrarily dirty
-                # Tektronix' app note on power supplies claims that power supplies typically exhibit crest factor between 4 and 10
-                # https://assets.testequity.com/te1/Documents/pdf/power-measurements_AC-DC-an.pdf
-                # in order to achieve same peak detection, range should be 3.3 higher than max measured RMS (since crest factor of meter is 3 and 3*3.3 is almost 10 :) )
-
-                # DM:
-                # will have to deprecate this (forever), since it will cause increase in uncertainties (up to about 2.5x), so might easily blow over 1%.
-
-                # if float(self._avgWatts) < 75:
-                #     self._desirableCurrentRange = str(float(self._maxAmps) * 3.3)
-                # else:
-                #     self._desirableCurrentRange = str(float(self._maxAmps) * 1.1)
-
-                self._desirableCurrentRange = str(float(self._maxAmps) * 1.1)
-
-            except MaxVoltsAmpsNegativeValuesError as e:
-                if test_duration < 1:
-                    raise MeasurementEndedTooFastError(
-                        f"the ranging measurement ended too fast (less than 1 second), no PTDaemon logs generated for {self._id!r}"
-                    ) from e
-                else:
-                    raise
+                        raise
             self._go_command_time = None
             self._server._summary.phase("ranging", 3)
+            # (PVA - MG) merge the log files for each analyzer into one file
+            input_files = [
+                os.path.join(dirname, f"spl_analyzer_{i+1}.csv")
+                for i in range(self._server._config.analyzer_count)
+            ]
+            output_file = os.path.join(dirname, "spl.txt")
+            if self._server._config.analyzer_count > 1:
+                merge_power_logs(input_files, output_file)
+            else:
+                shutil.copyfile(input_files[0], output_file)                                                                
             return True
 
         if mode == Mode.TESTING and self._state == SessionState.TESTING:
             self._state = SessionState.TESTING_DONE
-            watts = self._ptd.cmd("Watts")
-            uncertainty = self._ptd.cmd("Uncertainty")
-            self._ptd.stop()
             dirname = os.path.join(self.log_dir_path, "run_1")
             os.mkdir(dirname)
-            samples, log_data, uncertainty_data, sanity = self._ptd.grab_power_data()
-            # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)lines = log_data.split("\n")
-            lines = log_data.split("\n")
-            formatted_log_data = ""
-            for ii in range(len(lines)):
-                temp = lines[ii].split("Watts")
-                line_fixed = ""
-                for jj in range(len(temp)):
-                    line_fixed += temp[jj]
-                    if jj > 0 and (jj < len(temp) - 1 or len(temp) == 2):
-                        if jj == 1:
-                            if len(temp) == 2:
-                                line_fixed += ","
-                            line_fixed += "Mark," + self._id + "_testing"
+            
+            for i in range(len(self._ptd)):
+                watts = self._ptd[i].cmd("Watts")
+                uncertainty = self._ptd[i].cmd("Uncertainty")
+                self._ptd[i].stop()
+
+                samples, log_data, uncertainty_data, sanity = self._ptd[i].grab_power_data()
+                # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)lines = log_data.split("\n")
+                lines = log_data.split("\n")
+                formatted_log_data = ""
+                for ii in range(len(lines)):
+                    temp = lines[ii].split("Watts")
+                    line_fixed = ""
+                    for jj in range(len(temp)):
+                        line_fixed += temp[jj]
+                        if jj > 0 and (jj < len(temp) - 1 or len(temp) == 2):
+                            if jj == 1:
+                                if len(temp) == 2:
+                                    line_fixed += ","
+                                line_fixed += "Mark," + self._id + "_testing"
+                                if len(temp) > 2:
+                                    line_fixed += ","
                             if len(temp) > 2:
-                                line_fixed += ","
-                        if len(temp) > 2:
-                            line_fixed += "Ch" + str(jj) + ","
-                    if jj < len(temp) - 1:
-                        line_fixed += "Watts"
-                formatted_log_data += line_fixed + "\n"
-            with open(os.path.join(dirname, "spl.txt"), "w") as f:
-                f.write(formatted_log_data)
-            with open(os.path.join(dirname, "ptd_out.txt"), "w") as f:
-                f.write(f"Power: {watts} \nUncertainty: {uncertainty}")
-            self._server._summary.phase("testing", 3)
+                                line_fixed += "Ch" + str(jj) + ","
+                        if jj < len(temp) - 1:
+                            line_fixed += "Watts"
+                    formatted_log_data += line_fixed + "\n"
+                with open(os.path.join(dirname, f"spl_analyzer_{i+1}.txt"), "w") as f:
+                    f.write(formatted_log_data)
+                with open(os.path.join(dirname, "ptd_out.txt"), "a+") as f:
+                    f.write(f"Analyzer {i+1}:\n")
+                    f.write(f"Power: {watts} \nUncertainty: {uncertainty}\n")
+                self._server._summary.phase("testing", 3)
+                #return True
+            logging.info(
+                f"Merging {self._server._config.analyzer_count} log files into one file"
+            )
+            logging.info(f"Merging spl log files into one file")
+            input_files = [
+                os.path.join(dirname, f"spl_analyzer_{i+1}.txt")
+                for i in range(self._server._config.analyzer_count)
+            ]
+            output_file = os.path.join(dirname, "spl.txt")
+            if self._server._config.analyzer_count > 1:
+                merge_power_logs(input_files, output_file)
+            else:
+                shutil.copyfile(input_files[0], output_file)
+            logging.info(f"Merging ptd log files into one file")
+            for i in range(self._server._config.analyzer_count):
+                with open(
+                    os.path.join(
+                        self._ptd[i]._log_dir_path, f"ptd_logs_analyzer_{i+1}.txt"
+                    ),
+                    "r",
+                ) as f:
+                    log_data = f.read()
+                with open(
+                    os.path.join(self._ptd[i]._log_dir_path, "ptd_logs.txt"), "a+"
+                ) as f:
+                    f.write("Analyzer " + str(i + 1) + "\n")
+                    f.write(log_data)                
             return True
 
         # Unexpected state
         return False
 
     def drop(self) -> None:
-        self._ptd.terminate()
+        for _ptd in self._ptd:
+            _ptd.terminate()
         self._state = SessionState.DONE
 
 
@@ -1104,9 +1294,10 @@ def main() -> None:
     server = Server(config)
     try:
         server._ptd = Ptd(
-            server._config.ptd_command,
-            server._config.ptd_port,
+            server._config.ptd_command[0],
+            server._config.ptd_port[0],
             os.path.join(server._config.out_dir),
+            1,  
         )
         server._ptd.start()
         server._ptd.terminate()
