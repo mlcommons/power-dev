@@ -142,7 +142,7 @@ def merge_power_logs(inputfiles: List[str], outputfile: str) -> None:
                     if float(input_data[analyzer_num][line_num][3]) != -1:
                         # (MG) watts is absolute value in case the analyzer was mistakenly on the negative side
                         combined_watts += abs(
-                                float(input_data[analyzer_num][line_num][3])
+                            float(input_data[analyzer_num][line_num][3])
                         )
                 # "Time", time, "Watts", watts1+watts2+...+watts(n), "Volts", volts, "Amps", amps, "PF", pf
                 aggregate[3] = f"{combined_watts:.6f}"
@@ -157,7 +157,7 @@ def merge_power_logs(inputfiles: List[str], outputfile: str) -> None:
                 f_out.write("\n")
             except:
                 print(
-                        "Mismatch of total number of lines between Analyzer logs, skipping line number {line_num} from the log."
+                    "Mismatch of total number of lines between Analyzer logs, skipping line number {line_num} from the log."
                 )
 
 
@@ -381,7 +381,7 @@ class ServerConfig:
                 f"analyzer{i+1}", "channel", parse=parse_channel, fallback=None
             )
             self.ptd_port[i] = get(
-                    f"analyzer{i+1}", "networkPort", parse=int, fallback="8888"
+                f"analyzer{i+1}", "networkPort", parse=int, fallback="8888"
             )
             # TODO: validate ptd_device_type?
             self.ptd_device_type[i] = get(f"analyzer{i+1}", "deviceType", parse=int)
@@ -397,9 +397,9 @@ class ServerConfig:
             # (PVA) the self.tmp_dir.name is not changed to self.out_dir
             # we can have a list of supported/tested devices and throw a warning when new device is used?
             self.ptd_logfile[i] = os.path.join(
-                    self.tmp_dir.name, f"ptd_logfile_{i+1}.log"
+                self.tmp_dir.name, f"ptd_logfile_{i+1}.log"
             )
-            
+
             self.ptd_command[i] = [
                 get("ptd", "ptd"),
                 "-l",
@@ -901,7 +901,7 @@ class Server:
         ptd_messages = self.session._ptd[0]._messages
         if self._config.analyzer_count > 1:
             for i in range(1, self._config.analyzer_count):
-                ptd_messages.merge(self.session._ptd[i]._messages)                                                                                 
+                ptd_messages.merge(self.session._ptd[i]._messages)
         # ptd_messages = self.session._ptd._messages
         session, self.session = self.session, None
         summary, self._summary = self._summary, None
@@ -1013,15 +1013,15 @@ class Session:
                 _ptd.start()
                 _ptd.cmd("SR,V,Auto")
             if self._server._config.ranging_mode == "AUTO":
-                for _ptd in self._ptd:              
+                for _ptd in self._ptd:
                     _ptd.cmd("SR,A,Auto")
             elif self._server._config.ranging_mode == "MAX":
                 for i in range(self._server._config.analyzer_count):
                     ptd_device_type = self._server._config.ptd_device_type[i]
-                    if ptd_device_type in MAX_RANGE_FOR_DEVICE:                       
+                    if ptd_device_type in MAX_RANGE_FOR_DEVICE:
                         self._ptd[i].cmd(
                             f"SR,A,{MAX_RANGE_FOR_DEVICE[ptd_device_type]}"
-                        )   
+                        )
                     else:
                         logging.warning(
                             f"Unknown max range type for device {ptd_device_type}, using AUTO"
@@ -1029,7 +1029,7 @@ class Session:
                         self._ptd[i].cmd("SR,A,Auto")
             else:
                 logging.warning("Unknown range mode, using AUTO")
-            for _ptd in self._ptd:                          
+            for _ptd in self._ptd:
                 _ptd.cmd("SR,A,Auto")
 
             with common.sig:
@@ -1085,9 +1085,9 @@ class Session:
                 time.sleep(ANALYZER_SLEEP_SECONDS)
             logging.info("Starting testing mode")
             for i in range(len(self._ptd)):
-                logging.info(    
+                logging.info(
                     f"Analyzer [{i+1}] maxAmps: {self._desirableCurrentRange[i]}, maxVolts: {self._maxVolts[i]}"
-                )   
+                )
             # self._ptd.cmd(f"Go,1000,0,{self._id}_testing")
             threads = []
             for _ptd in self._ptd:
@@ -1133,7 +1133,7 @@ class Session:
             for i in range(self._server._config.analyzer_count):
                 self._ptd[i].stop()
                 samples, log_data, uncertainty_data, sanity = self._ptd[
-                        i
+                    i
                 ].grab_power_data()
                 # (DM) really ugly function that will parse telnet log and reformat it in log that is same as ptd.log
                 # If anyone knows how to do it better, please do
@@ -1235,7 +1235,7 @@ class Session:
                 self._ptd[i].stop()
 
                 samples, log_data, uncertainty_data, sanity = self._ptd[
-                        i
+                    i
                 ].grab_power_data()
                 # (DM) TODO: figure out how to flag/report number of unvertain samples and how to disqualify bad run(s)lines = log_data.split("\n")
                 lines = log_data.split("\n")
