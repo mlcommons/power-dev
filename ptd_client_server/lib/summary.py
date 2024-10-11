@@ -118,7 +118,7 @@ class PtdMessages:
         self._m.append({"cmd": cmd, "reply": reply})
 
     def merge(self, other: "PtdMessages") -> None:
-        self._m.extend(other._m)  
+        self._m.extend(other._m)
 
     def to_json(self) -> Any:
         return self._m
