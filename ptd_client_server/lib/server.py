@@ -443,7 +443,11 @@ class ServerConfig:
                     f"{', '.join(unused_options)}"
                 )
 
-        unused_sections = set(conf.sections()) - {"server", "ptd"} - set([i for i in conf.sections() if  i.startswith("analyzer")])
+        unused_sections = (
+            set(conf.sections())
+            - {"server", "ptd"}
+            - set([i for i in conf.sections() if i.startswith("analyzer")])
+        )
 
         if len(unused_sections) != 0:
             logging.warning(
