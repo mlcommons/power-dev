@@ -443,7 +443,12 @@ class ServerConfig:
                     f"{', '.join(unused_options)}"
                 )
 
-        unused_sections = set(conf.sections()) - {"server", "ptd"}
+        unused_sections = (
+            set(conf.sections())
+            - {"server", "ptd"}
+            - set([i for i in conf.sections() if i.startswith("analyzer")])
+        )
+
         if len(unused_sections) != 0:
             logging.warning(
                 f"{filename}: ignoring unknown sections: {', '.join(unused_sections)}"
