@@ -52,4 +52,5 @@ jobs:
           git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
           # Commit changes
           git commit -m '[Automated Commit] Update checksums'
-          git push 
+          git push
+        fi
