@@ -49,8 +49,8 @@ jobs:
         HAS_CHANGES=$(git diff --staged --name-only)
         if [ ${#HAS_CHANGES} -gt 0 ]; then
           # Use the GitHub actor's name and email
-          git config --global user.name "${GITHUB_ACTOR}"
-          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git config --global user.name mlcommons-bot
+          git config --global user.email "mlcommons-bot@users.noreply.github.com"
           # Commit changes
           git commit -am '[Automated Commit] Update checksums'
           git push
