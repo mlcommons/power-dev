@@ -25,8 +25,7 @@ jobs:
     - name: Install dependencies
       run: |
         python3 -m pip install --upgrade pip
-        python3 -m pip install cmind
-        cm pull repo mlcommons@ck
+        python3 -m pip install cm4mlops
         cm run script --quiet --tags=get,sys-utils-cm
  
     - name: Start power server
@@ -35,4 +34,4 @@ jobs:
 
     - name: Test CM Script for MLPerf Inference ResNet50 with power
       run: |
-        cm run script --tags=run,mlperf,inference,generate-run-cmds,_performance-only,_short --submitter="cTuning" --model=resnet50 --backend=onnxruntime --device=cpu --scenario=Offline --test_query_count=5 --precision=fp32 --quiet --power=yes
+        cm run script --tags=run,mlperf,inference,generate-run-cmds,_performance-only,_short --submitter="MLCommons" --model=resnet50 --backend=onnxruntime --device=cpu --scenario=Offline --test_query_count=5 --precision=fp32 --quiet --power=yes
