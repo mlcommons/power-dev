@@ -45,11 +45,11 @@ jobs:
     - name: Update the source checksums
       run: |
         python3 compliance/helper/update_sources_checksum.py
+        git config --global user.name "${GITHUB_ACTOR}"
+        git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+        git add compliance/sources_checksums.json
         HAS_CHANGES=$(git diff --staged --name-only)
         if [ ${#HAS_CHANGES} -gt 0 ]; then
-          # Use the GitHub actor's name and email
-          git config --global user.name "${GITHUB_ACTOR}"
-          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
           # Commit changes
           git commit -am '[Automated Commit] Update checksums'
           git push
