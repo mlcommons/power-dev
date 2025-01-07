@@ -5,7 +5,7 @@ on:
       - master
     paths:
     - 'compliance/**'
-    - '.github/workflows/update_checksums.yaml'
+    - '.github/workflows/update_checksums.yml'
     - '__init__.py'
     - 'client.py'
     - 'lib/__init__.py'
