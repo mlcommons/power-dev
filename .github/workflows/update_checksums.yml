@@ -21,8 +21,9 @@ on:
     - 'tests/unit/__init__.py'
     - 'tests/unit/test_server.py'
     - 'tests/unit/test_source_hashes.py'
+    
 jobs:
-  check:
+  update_checksums:
     name: Check Python
     runs-on: "${{ matrix.on }}"
     strategy:
@@ -33,6 +34,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
