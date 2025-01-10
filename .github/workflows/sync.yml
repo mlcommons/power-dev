@@ -17,10 +17,10 @@ jobs:
         with:
           keeper-secret-config: ${{ secrets.KSM_CONFIG }}
           secrets: |-
-            oISGH1N1wIEirucX9m5ung/field/Access Token > env:PAT  # Fetch PAT and store in environment variable
+            oISGH1N1wIEirucX9m5ung/field/Access Token > env:INFERENCE_ACCESS_TOKEN  # Fetch PAT and store in environment variable
       - name: Run GitHub File Sync
         uses: BetaHuhn/repo-file-sync-action@v1
         with:
-          GH_PAT: ${{ env.PAT }}  # Use PAT fetched from Keeper
+          GH_PAT: ${{ env.INFERENCE_ACCESS_TOKEN }}  # Use PAT fetched from Keeper
           TEAM_REVIEWERS: wg-inference
           SKIP_PR: false
