@@ -28,10 +28,18 @@ jobs:
         python3 -m pip install cmind
         cm pull repo mlcommons@ck
         cm run script --quiet --tags=get,sys-utils-cm
+
+    - name: Retrieve secrets from Keeper
+      id: ksecrets
+      uses: Keeper-Security/ksm-action@master
+      with:
+        keeper-secret-config: ${{ secrets.KSM_CONFIG }}
+        secrets: |-
+          cAEVIvfzh_W2DWjhDoGiQQ/field/Access Token > env:PAT  # Fetch PAT and store in environment variable
  
     - name: Start power server
       run: |
-        cm run script --tags=run,mlperf,power,server --device_type=0 --screen=yes --quiet --env.CM_GH_TOKEN=${{ secrets.ACCESS_TOKEN }}
+        cm run script --tags=run,mlperf,power,server --device_type=0 --screen=yes --quiet --env.CM_GH_TOKEN=${{ env.PAT }}  # Use PAT fetched from Keeper
 
     - name: Test CM Script for MLPerf Inference ResNet50 with power
       run: |
