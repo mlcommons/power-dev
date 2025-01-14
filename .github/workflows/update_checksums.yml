@@ -1,0 +1,56 @@
+name: Update checksums
+on:
+  push:
+    branches:
+      - master
+    paths:
+    - 'compliance/**'
+    - '.github/workflows/update_checksums.yml'
+    - '__init__.py'
+    - 'client.py'
+    - 'lib/__init__.py'
+    - 'lib/client.py'
+    - 'lib/common.py'
+    - 'lib/external/__init__.py'
+    - 'lib/external/ntplib.py'
+    - 'lib/server.py'
+    - 'lib/source_hashes.py'
+    - 'lib/summary.py'
+    - 'lib/time_sync.py'
+    - 'server.py'
+    - 'tests/unit/__init__.py'
+    - 'tests/unit/test_server.py'
+    - 'tests/unit/test_source_hashes.py'
+    
+jobs:
+  update_checksums:
+    name: Check Python
+    runs-on: "${{ matrix.on }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.9]
+        on: [ubuntu-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Update the source checksums
+      run: |
+        python3 compliance/helper/update_sources_checksum.py
+        git config --global user.name "${GITHUB_ACTOR}"
+        git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+        git add compliance/sources_checksums.json
+        HAS_CHANGES=$(git diff --staged --name-only)
+        if [ ${#HAS_CHANGES} -gt 0 ]; then
+          # Commit changes
+          git commit -am '[Automated Commit] Update checksums'
+          git push
+        fi
