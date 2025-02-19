@@ -708,10 +708,9 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
 
     for analyzer in ptd_config:
         dev_num = analyzer["device_type"]
-        assert (
-            dev_num in SUPPORTED_MODEL.values()
-        ), f"Device number {dev_num} is not supported. Supported numbers are " + ", ".join(
-            [str(i) for i in set(SUPPORTED_MODEL.values())]
+        assert dev_num in SUPPORTED_MODEL.values(), (
+            f"Device number {dev_num} is not supported. Supported numbers are "
+            + ", ".join([str(i) for i in set(SUPPORTED_MODEL.values())])
         )
 
         if dev_num == 77:
@@ -734,6 +733,7 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
                 and analyzer["channel"]
                 and len(analyzer["channel"]) == 2
             ), f"Expected multichannel mode for {dev_name}, but got 1-channel."
+
 
 def debug_check(server_sd: SessionDescriptor) -> None:
     """Check debug is disabled on server-side"""
