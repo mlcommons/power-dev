@@ -266,8 +266,8 @@ def ptd_messages_check(sd: SessionDescriptor) -> None:
     initial_amps_command_3 = get_command_by_value_and_number("SR,A", 3)
     initial_amps_command_4 = get_command_by_value_and_number("SR,A", 4)
     initial_volts_command = get_command_by_value_and_number("SR,V", 3)
-    assert (
-        (initial_amps_command_3 == f"SR,A,{initial_amps}") or (initial_amps_command_4 == f"SR,A,{initial_amps}")
+    assert (initial_amps_command_3 == f"SR,A,{initial_amps}") or (
+        initial_amps_command_4 == f"SR,A,{initial_amps}"
     ), f"Do not set Amps range as initial. Expected 'SR,A,{initial_amps}', got {initial_amps_command_3!r} and {initial_amps_command_4!r}."
     assert (
         initial_volts_command == f"SR,V,{initial_volts}"
