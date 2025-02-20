@@ -27,10 +27,17 @@ jobs:
         python3 -m pip install --upgrade pip
         python3 -m pip install cm4mlops
         cm run script --quiet --tags=get,sys-utils-cm
- 
+
+    - name: Retrieve secrets from Keeper
+      id: ksecrets
+      uses: Keeper-Security/ksm-action@master
+      with:
+        keeper-secret-config: ${{ secrets.KSM_CONFIG }}
+        secrets: |-
+          cAEVIvfzh_W2DWjhDoGiQQ/field/Access Token > env:ACCESS_TOKEN
     - name: Start power server
       run: |
-        cm run script --tags=run,mlperf,power,server --device_type=0 --screen=yes --quiet --env.CM_GH_TOKEN=${{ secrets.ACCESS_TOKEN }}
+        cm run script --tags=run,mlperf,power,server --device_type=0 --screen=yes --quiet --env.CM_GH_TOKEN=${{ env.ACCESS_TOKEN }}  # Use PAT fetched from Keeper
 
     - name: Test CM Script for MLPerf Inference ResNet50 with power
       run: |
