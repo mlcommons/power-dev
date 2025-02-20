@@ -706,33 +706,33 @@ def check_ptd_config(server_sd: SessionDescriptor) -> None:
     """
     ptd_config = server_sd.json_object["ptd_config"]
 
-    dev_num = ptd_config["device_type"]
-    assert (
-        dev_num in SUPPORTED_MODEL.values()
-    ), f"Device number {dev_num} is not supported. Supported numbers are " + ", ".join(
-        [str(i) for i in set(SUPPORTED_MODEL.values())]
-    )
+    for analyzer in ptd_config:
+        dev_num = analyzer["device_type"]
+        assert dev_num in SUPPORTED_MODEL.values(), (
+            f"Device number {dev_num} is not supported. Supported numbers are "
+            + ", ".join([str(i) for i in set(SUPPORTED_MODEL.values())])
+        )
 
-    if dev_num == 77:
-        channels = ""
-        command = ptd_config["command"]
+        if dev_num == 77:
+            channels = ""
+            command = analyzer["command"]
 
-        for i in range(len(command)):
-            if command[i] == "-c":
-                channels = command[i + 1]
-                break
+            for i in range(len(command)):
+                if command[i] == "-c":
+                    channels = command[i + 1]
+                    break
 
-        dev_name = ""
-        for name, num in SUPPORTED_MODEL.items():
-            if num == dev_num:
-                dev_name = name
-                break
+            dev_name = ""
+            for name, num in SUPPORTED_MODEL.items():
+                if num == dev_num:
+                    dev_name = name
+                    break
 
-        assert (
-            len(channels.split(",")) == 2
-            and ptd_config["channel"]
-            and len(ptd_config["channel"]) == 2
-        ), f"Expected multichannel mode for {dev_name}, but got 1-channel."
+            assert (
+                len(channels.split(",")) == 2
+                and analyzer["channel"]
+                and len(analyzer["channel"]) == 2
+            ), f"Expected multichannel mode for {dev_name}, but got 1-channel."
 
 
 def debug_check(server_sd: SessionDescriptor) -> None:
