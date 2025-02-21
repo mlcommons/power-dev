@@ -262,12 +262,13 @@ def ptd_messages_check(sd: SessionDescriptor) -> None:
     initial_amps = get_initial_range(1, msgs[2]["reply"])
     initial_volts = get_initial_range(3, msgs[2]["reply"])
 
-    initial_amps_command = get_command_by_value_and_number("SR,A", 3)
+    # sometimes the SR,A,Auto comes from 3rd or 4th response
+    initial_amps_command_3 = get_command_by_value_and_number("SR,A", 3)
+    initial_amps_command_4 = get_command_by_value_and_number("SR,A", 4)
     initial_volts_command = get_command_by_value_and_number("SR,V", 3)
-
-    assert (
-        initial_amps_command == f"SR,A,{initial_amps}"
-    ), f"Do not set Amps range as initial. Expected 'SR,A,{initial_amps}', got {initial_amps_command!r}."
+    assert (initial_amps_command_3 == f"SR,A,{initial_amps}") or (
+        initial_amps_command_4 == f"SR,A,{initial_amps}"
+    ), f"Do not set Amps range as initial. Expected 'SR,A,{initial_amps}', got {initial_amps_command_3!r} and {initial_amps_command_4!r}."
     assert (
         initial_volts_command == f"SR,V,{initial_volts}"
     ), f"Do not set Volts range as initial. Expected 'SR,V,{initial_volts}', got {initial_volts_command!r}."
