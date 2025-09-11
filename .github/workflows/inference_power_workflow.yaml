@@ -31,9 +31,7 @@ jobs:
 
       - name: Load secret
         id: op-load-secret
-        uses: 1password/load-secrets-action@v2
-        with:
-          export-env: false
+        uses: 1password/load-secrets-action@v3
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           ACCESS_TOKEN: op://pwlc2kez7wyl6pfbgewware4vy/jzk6yvmfz5s65fxfvlbijttcry/credential
