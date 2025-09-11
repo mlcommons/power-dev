@@ -7,20 +7,22 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    environment: master
     if: github.repository == 'mlcommons/power-dev'
     steps:
       - name: Checkout Repository
         uses: actions/checkout@master
-      - name: Retrieve secrets from Keeper
-        id: ksecrets
-        uses: Keeper-Security/ksm-action@master
+      - name: Load secret
+        id: op-load-secret
+        uses: 1password/load-secrets-action@v2
         with:
-          keeper-secret-config: ${{ secrets.KSM_CONFIG }}
-          secrets: |-
-            oISGH1N1wIEirucX9m5ung/field/Access Token > env:INFERENCE_ACCESS_TOKEN 
+          export-env: false
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          INFERENCE_ACCESS_TOKEN: op://pwlc2kez7wyl6pfbgewware4vy/tcycqeki2ekffq4w2v7tret5om/credential
       - name: Run GitHub File Sync
         uses: BetaHuhn/repo-file-sync-action@v1
         with:
-          GH_PAT: ${{ env.INFERENCE_ACCESS_TOKEN }}  # Use PAT fetched from Keeper
+          GH_PAT: ${{ steps.op-load-secret.outputs.INFERENCE_ACCESS_TOKEN }}
           TEAM_REVIEWERS: wg-inference
           SKIP_PR: false

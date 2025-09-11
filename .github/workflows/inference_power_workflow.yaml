@@ -9,6 +9,7 @@ jobs:
    cm_check:
     name: Check power workflow
     runs-on: "${{ matrix.on }}"
+    environment: master
     strategy:
       fail-fast: false
       matrix:
@@ -28,16 +29,15 @@ jobs:
         python3 -m pip install cm4mlops
         cm run script --quiet --tags=get,sys-utils-cm
 
-    - name: Retrieve secrets from Keeper
-      id: ksecrets
-      uses: Keeper-Security/ksm-action@master
-      with:
-        keeper-secret-config: ${{ secrets.KSM_CONFIG }}
-        secrets: |-
-          cAEVIvfzh_W2DWjhDoGiQQ/field/Access Token > env:ACCESS_TOKEN
+      - name: Load secret
+        id: op-load-secret
+        uses: 1password/load-secrets-action@v3
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          ACCESS_TOKEN: op://pwlc2kez7wyl6pfbgewware4vy/jzk6yvmfz5s65fxfvlbijttcry/credential
     - name: Start power server
       run: |
-        cm run script --tags=run,mlperf,power,server --device_type=0 --screen=yes --quiet --env.CM_GH_TOKEN=${{ env.ACCESS_TOKEN }}  # Use PAT fetched from Keeper
+        cm run script --tags=run,mlperf,power,server --device_type=0 --screen=yes --quiet --env.CM_GH_TOKEN=${{ steps.op-load-secret.outputs.ACCESS_TOKEN }}
 
     - name: Test CM Script for MLPerf Inference ResNet50 with power
       run: |
