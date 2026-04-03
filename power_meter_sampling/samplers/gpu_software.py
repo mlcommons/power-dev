@@ -23,7 +23,6 @@
 # Supported platforms:
 #   NVIDIA  - pynvml (in-process) or nvidia-smi (subprocess fallback)
 #   AMD     - amdsmi (ROCm 5.7+) or rocm-smi (subprocess fallback)
-#   Intel   - hl-smi for Gaudi accelerators
 #
 # Usage with sample_metrics.py:
 #   cd power_meter_sampling
@@ -31,7 +30,7 @@
 #
 # Optional configuration via gpu_software.json:
 #   {
-#     "platform": "auto",        # "auto", "nvidia", "amd", or "gaudi"
+#     "platform": "auto",        # "auto", "nvidia", or "amd"
 #     "gpu_indices": null         # null for all GPUs, or [0, 1] for specific ones
 #   }
 
@@ -100,8 +99,6 @@ class Sampler():
             return self._read_amdsmi()
         elif self._platform == "rocm-smi":
             return self._read_rocm_smi()
-        elif self._platform == "hl-smi":
-            return self._read_hlsmi()
         return tuple(0.0 for _ in range(self._num_gpus))
 
     # ------------------------------------------------------------------
@@ -119,9 +116,6 @@ class Sampler():
             if self._try_amdsmi():
                 return
             if self._try_rocm_smi():
-                return
-        if platform_hint in ("auto", "gaudi"):
-            if self._try_hlsmi():
                 return
         self._num_gpus = 0
 
@@ -214,27 +208,6 @@ class Sampler():
         except Exception:
             return False
 
-    def _try_hlsmi(self):
-        try:
-            result = subprocess.run(
-                ["hl-smi", "-q", "-d", "POWER"],
-                capture_output=True, text=True, timeout=10,
-            )
-            if result.returncode != 0:
-                return False
-            powers = re.findall(r"Power Draw\s*:\s*([\d.]+)\s*W", result.stdout)
-            if not powers:
-                return False
-            values = [float(p) for p in powers]
-            if any(v <= 0 for v in values):
-                return False
-            indices = self._filter_indices(len(values))
-            self._num_gpus = len(indices)
-            self._platform = "hl-smi"
-            return True
-        except Exception:
-            return False
-
     # ------------------------------------------------------------------
     # Readers
     # ------------------------------------------------------------------
@@ -284,22 +257,6 @@ class Sampler():
             all_powers = self._parse_rocm_smi_multi(data)
             indices = self._filter_indices(len(all_powers))
             return tuple(all_powers[i] for i in indices[:self._num_gpus])
-        except Exception:
-            return tuple(0.0 for _ in range(self._num_gpus))
-
-    def _read_hlsmi(self):
-        try:
-            result = subprocess.run(
-                ["hl-smi", "-q", "-d", "POWER"],
-                capture_output=True, text=True, timeout=10,
-            )
-            matches = re.findall(r"Power Draw\s*:\s*([\d.]+)\s*W", result.stdout)
-            all_values = [float(m) for m in matches]
-            indices = self._filter_indices(len(all_values))
-            values = [all_values[i] for i in indices[:self._num_gpus]]
-            while len(values) < self._num_gpus:
-                values.append(0.0)
-            return tuple(values)
         except Exception:
             return tuple(0.0 for _ in range(self._num_gpus))
 
